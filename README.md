@@ -1,487 +1,535 @@
-# UPnPLib #
-The most common way to find ESP devices on a local network is to use mDNS and give each device a hard coded host name. This means that device developers have to name their devices in a way that avoids conflict, and users have to keep track of all device names on their local network. Simple Service Discovery Protocol (SSDP) is part of the Universal Plug and Play (UPnP) standard, and provides a means to find devices on a local network automatically without mDNS. One device can be named and all others can be discovered.
+# SystemClock #
  
-This UPnP library implements an abbreviated version of [UPnP SSDP](http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf) that gives just enough information to populate a UPnP device hierarchy (root, embedded devices, and services) and allow query for device type and availability. It also provides base class implementation for UPnPDevice, UPnPService, and RootDevice, and a framework for HTML user interface for device interaction. The code is intended for Arduino devices ESP8266 and ESP32, and requires the additional [CommonUtil library](https://github.com/dltoth/CommonUtil/) to facilitate device user interface and Web Server abstraction. The companion library [DeviceLib](https://github.com/dltoth/DeviceLib) provides a rich set of turnkey UPnPDevices for ESP8266/ESP32, but is not required. In what follows, the basic structure for creating custom UPnPDevices and UPnPServices, and advertising them over a local network with SSDP is presented.
+Small electronic devices like Arduino have no global sense of Date or Time, only relative time in terms of milliseconds since boot. Internet
+connected devices like ESP8266 and ESP32 have the capability to query a network time service to coordinate their internal millisecond timer
+to an external service. <b>SystemClock</b> is a library for ESP8266 and ESP32 that provides this capability, synchronizing the internal
+millisecond timer, <i>millis()</i>, to a Network Time Protocol (NTP) server. 
+
+An NTP query supplies two pairs of unsigned 32-bit timestamps, each pair consisting of an unsigned seconds and unsigned fraction representing 
+time since Jan 1, 1900 00:00:00 in Coordinated Universal Time (UTC). One pair marking time on the NTP server when the query arrived, and one 
+pair marking time when the server response was transmitted. As described [in detail below](#ntp-background), a client device can use these timestamps with its 
+on board millisecond timer to produce an NTP synchronized time.
 
 ## Basic Usage ##
-UPnP Defines three basic constructs: root devices, embedded devices, and services, where both root devices and embedded devices can have services and embedded devices. Services are leaf nodes of the hierarchy and may not have either embedded devices or services. Essentially, a root device is a container for a device heirarchy consisting of embedded devices and services. UPnP does not limit the depth or breadth of a device heirarchy. Root devices publish their functionality over HTTP and discovery (SSDP) over UDP.
 
-<b>In this library, only root devices (RootDevice) can have embedded devices (UPnPDevice), and the number of embedded devices is limited to 8. Both RootDevices and embedded devices can have services (UPnPService), and the number of services is also limited to 8.</b> In terms of class heirarchy, RootDevice is a subclass of UPnPDevice, which in turn is a subclass of UPnPObject, and UPnPService is a subclass of UPnPObject.
+The three main classes that make up this library can be used to develop an NTP synchronized system clock.
 
-The classes <b><i>RootDevice</i></b>, <b><i>UPnPDevice</i></b>, <b><i>UPnPService</i></b> and <b><i>SSDP</i></b> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location <i>http://device-IP:port</i>, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. A basic sketch has the following form:
+The <b><i>Instant</i></b> class represents a point on the NTP timescale described above as seconds since Jan 1, 1900 00:00:00 (See [NTP Background](#ntp-background)
+for a detailed discussion on the NTP timescale). <i>Instant</i> has a complete set of operators for addition, subtraction, comparison, and division by integer, all
+used in computing the NTP clock offset. <i>Instant</i> also has useful conversions between the NTP timescale and date/time, as well as formatted printing to 
+a char buffer.
+
+The <b><i>Timestamp</i></b> class is a combination of <i>Instant</i> with a millisecond timestamp. Together these two classes can be used to keep track of elapsed
+time on a host system. 
+
+The <b><i>NTPTime</i></b> class provides the interface to an NTP time service for synchronization. The following lines of code will create a timestamp,
+synchronize it with NTP, and keep it updated: 
 
 ```
-#define AP_SSID "My_SSID"
-#define AP_PSK  "MY_PSK"
+   #include <SystemClock.h>
+   using namespace lsc;
+   
+   Instant      ref(0,JAN1_2024,0)                                 // Create an instant initialized to Jan 1, 2024 00:00:00
+   Timestamp    start(ref);                                        // Create a Timestamp with the ref Instant
+   Instant      ofst;                                              // NTP clock offset returned as FYI                 
+   Timestamp    current = NTPTime::updateSysTime(start,ofst);      // Synchronize start time with NTP and return clock offset used in calculation 
+```
 
-#include <UPnPLib.h>
-SSDP       ssdp;
-RootDevice root;
-WebContext ctx;
+The Timestamp <i>current</i> is now synchronized to NTP. At any time, to produce a current UTC date/time from the onboard millisecond timer:
 
-void setup() {
+```
+   Instant      now = current.update().ntpTime();                  // Fold elapsed millis into current.ntpTime()
+   Date         d   = now.toDate();                                // Convert to UTC Date
+   Time         t   = now.toTime();                                // Convert to UTC Time
+```
 
-  Serial.begin(115200);
-  while (!Serial) {
-    ; // wait for serial port to connect
+where <i>Date</i> and <i>Time</i> are structs defined in <i>Instant.h</i>.
+
+To produce date/time in a specific timezone:
+
+```
+   now = current.update().ntpTime().toTimezone(-5.0);              // Produce now in EST
+```
+
+At any time, <i>current</i> can be synchronized with NTP as:
+
+```
+   current = NTPTime::updateSysTime(current,ofst);
+```
+
+In order to determine how far the on board millisecond timer has drifted from NTP, the clock offset can be computed as:
+
+```
+   Instant      offset  = NTPTime::ntpOffset(current);
+   double       secs    = offset.sysTimed();
+```
+
+Note that once <i>current</i> has been aligned to NTP, the offset can be computed without calling <i>current.update()</i> first.
+
+Complete system clock functionality is provided by the <i><b>SystemClock</b></i> class:
+
+```
+   #include <SystemClock.h>
+   using namespace lsc;
+
+   SystemClock c;
+   c.tzOffset(-5.0);            // Set timezone to EST, default is UTC
+   c.ntpSync(90);               // Synchronize with NTP every 90 minutes, default is 60
+   Instant current = c.now()    // Get current EST time, updated from NTP as necessary
+```
+
+The <b>SystemClock</b> library will provide date and time in local time zone, periodically synchronizing the internal millisecond 
+timer with an NTP server. 
+
+The full set of classes in the SystemClock library include:
+
+```
+  SystemClock      := Provides an NTP synchronized clock for system time
+  Instant          := A point on the NTP timescale implemented to replicate NTP 64-bit integer seconds and 
+                      unsigned 32-bit fraction
+  Timestamp        := An Instant stamped with an internal millisecond timestamp
+  NTPTime          := Interface to NTP, providing clock offset for synchronization and update of system time
+  Timer            := Measures elapsed time and performs a unit of work
+```
+
+<a name="ntp-background"></a>
+
+## NTP Background ##
+
+Network Time Protocol (NTP) is used for synchronizing clocks over the Internet. The wire protocol supplies two pairs of unsigned 32-bit 
+timestamps, each pair consisting of an unsigned seconds and unsigned fraction representing time since Jan 1, 1900 00:00:00 in Coordinated 
+Universal Time (UTC). The date Jan 1, 1900 00:00:00 is referred to as the <i>Prime Epoch</i>. Note that in representing seconds with only 
+32 bits of precision, the timestamp will roll over every 136 years. For this reason, NTP also specifies a 128 bit Datestamp. A Datestamp 
+has the form:
+   
+```
+   [signed 32 bit era][unsigned 32 bit era offset][64 bit fraction]
+```
+      
+The high order 32 bits of the seconds field is a signed integer <b><i>era</b></i>, where each era represents 2<sup>32</sup> seconds, 
+or 136 years. Positive era for timestamps after the prime epoch, and negative values for before. The lower order 32 bits represent an unsigned
+era offset. Era offset is always a positive number of seconds offset from the era, ranging fom 0 to 2<sup>32-1</sup>. Era 0 begins moving 
+forward from Jan 1, 1900 00:00:00, and era -1 begins moving backward from that same point. So, the first second of era 0 is offset 1 on Jan 1, 
+at 1900 00:00:01, and the first second of era -1 is offset 4294967295 on Dec 31 1899 at 23:59:59. System time on the NTP timescale is then 
+defined as a 64 bit signed integer seconds and 64 bit fraction, spanning 584 billion years with attosecond accuracy<sup>[1](#references)</sup>. 
+
+Positive values represent 
+time after the prime epoch and negative values represent time prior to the epoch.  
+
+Here are a few examples:
+   
+```
+   Era    Offset          System Time          Date/Time
+    0     3913056000       3913056000          Jan 1,  2024  00:00:00
+    0     4294967295       4294967295          Feb 7,  2036  06:28:15
+    1     0                4294967296          Feb 7,  2036  06:28:16
+    2     0                8589934592          Mar 15, 2172  12:56:32   
+   -1     4294967295      -1                   Dec 31, 1899  23:59:59
+   -1     0               -4294967296          Nov 24, 1763  17:31:44
+   -2     0               -8589934592          Oct 18, 1627  11:03:28 
+```
+ 
+Notes:
+* The NTP Timestamp will roll over on Feb 7, 2036 at 06:28:15.
+* The relationship between era, offset, and system time is as follows:
+
+```
+    system time  = era*(2^32) + era offset
+    era          = (system time - offset)/(2^32)
+    era offset   = system time - era*(2^32)
+```
+
+* Era and era offset can be computed directly from the system time as:
+
+```
+    remainder    = system time % 2^32
+    era offset   = ((remainder<0)?(remainder+2^32):(remainder))
+    era          = ((remainder<0)?((system time/2^32)-1):(system time/2^32))
+```
+
+The relationship between system time, era, era offset, and remainder is shown in the figure below.
+
+````  
+                                                                          |----offset--->|
+            |---offset--->|<-remainder--|                |                |--remainder-->|
+            |------------><------(system time < 0)-------|------(system time > 0)------->|
+   _________+___________________________+_________________________________+_____________________+____________...
+     (era-1)*2^32                    era*2^32      ...   0   ...       era*2^32          (era+1)*2^32
+                      ...    era < 0                     |              era > 0    ...
+````
+
+The fractional part of an NTP timestamp is always positive (non-negative) and represents an offset from the system time. So, system time as a floating point is
+
+```
+    system time + fraction/2^32
+```
+
+The relationship between system time and fraction is shown in the figure below.
+
+````  
+            |                           <--fraction-->|
+            |<--------- system time - 1 ------------->|<----- system time -----><--- fraction --->|
+            |<------------(system time < 0)-----------|<-------------(system time > 0)------------|
+   _____________________________________________________________________________________________________
+                                                  ... 0 ...
+````
+
+### Clock Synchronization ###
+
+NTP is a request/response protocol over UDP, where a client computer sends a request for timestamp to an NTP server. The NTP
+response headers provide two 64 bit timestamps, each containing an unsigned 32 bit seconds from Jan 1, 1900 (00:00:00 UTC) and 
+an unsigned 32 bit fraction. Call these timestamps t2 and t3 respectively where:
+   
+```
+      t2 - the 32 bit timestamps (offset and fraction) on the NTP server that the request was received 
+      t3 - the 32 bit timestamps (offset and fraction) on the NTP server that the response was sent
+```
+
+Note that the timestamps t2 and t3 are defined in terms of <b><i>era offset only</b></i> because the actual era is not transmitted 
+from the NTP server. In order to express t3 and t3 in full system time, NTP server era must be determined. To this end, era offsets 
+between client and server are examined to determine if client and server reside in the same or different eras.
+
+While it is possible for two points on the NTP scale to be more than 68 years apart and reside in the same era, if we assume that 
+system time on two clocks are within 68 years (half of an era, or 136 years) and respective era offsets are greater than 68 years, 
+then clocks will necessarily straddle an era boundary. In clock synchronization we assume the client clock is initialized to within 
+68 years of the server. So if 
+
+```
+     client offset - server offset > 68 years
+```
+
+the NTP server has rolled, and era on the server is 1 greater than client. Similarly, if
+
+```
+     client offset - server offset < -68 years
+```
+
+the client has rolled and era on the server is 1 less than client. Otherwise, client and server reside in the same era. Since era on the client
+is known, and from the above, era on the server can be derived. So now define the Instants T2 and T3 as:
+
+```
+      T2 - the Instant (era, offset, and fraction) on the NTP server that the request was received 
+      T3 - the Instant (era, offset, and fraction) on the NTP server that the response was sent
+```
+
+Since the client clock is initialized to within 68 years of actual server time, era on the client clock is known. Instants on the client 
+are given as a full 64-bit signed integer system time (seconds since Jan 1, 1900) and an unsigned 32-bit fraction. Now, define two additional 
+Instants:
+   
+```
+      T1 - the Instant (era, offset, and fraction) on the client computer that the request was sent
+      T4 - the Instant (era, offset, and fraction) on the client computer that the response was received
+```
+
+The clock offset between client and NTP server can now be computed as:
+
+```
+      clock offset = ((T2-T1+(T3-T4)))/2
+```
+
+where each of the Instants T1,...,T4 are signed 64-bit seconds and unsigned 32-bit fraction. The client clock is then updated with the 
+NTP clock offset as:
+
+```
+      sysTime = T4 + clock offset;
+```
+
+For more detail on NTP see: [NTP Protocol rfc5905](https://www.rfc-editor.org/rfc/rfc5905)
+
+
+## Class Detail ##
+
+As mentioned above there are a number of classes that make up this library, together they form the basis for a system clock
+that synchronizes with NTP. 
+
+### Instant ###
+
+The <b><i>Instant</b></i> class represents a point on the NTP timeline, and has methods that provide era, era offset, date, and time. 
+Instant is given only as seconds (from Jan 1, 1900 UTC) and fraction; timezone must be managed separately. 
+
+Conceptually, Instant can either be implemented with a signed 64-bit integer seconds and unsigned 32-bit fraction offset, or more simply, a 
+double precision seconds from Jan 1, 1900. In this library, Instant is implemented with signed 64-bit seconds and unsigned 32 bit 
+offset fraction. The choice to use a combination of 64 and 32 bit integers rather than double precision is two-fold: First, to maintain 
+the same precision as NTP, and second to take advantage of the speed of integer computation over double precision. The 64-bit seconds field 
+is a combination of 32-bit signed era and 32-bit unsigned era offset pre-computed to the sysTime as:
+
+```
+      sysTime = era*POW2_32+eraOffset
+```
+ 
+The unsigned offset fraction makes arithmetic a little more tricky when sysTime is negative, but still only requires 32-bit addition and subtraction. 
+
+Instant has a full compliment of operators to make the clock offset calculation simpler. For example, if making an NTP request and:
+
+```
+      T1 := Instant the request was sent on the client
+      T2 := Instant the request was received on the NTP server
+      T3 := Instant the server sends the response and
+      T4 := Instant the client receives the response
+```
+
+then the clock offset can be computed as:
+
+```
+      Instant clockOffset = ((T2-T1)+(T3-T4))/2;
+```
+
+and the system time can be updated as:
+
+```
+      Instant sysTime = T4 + clockOffset;
+```
+
+Instant can be converted between NTP system time and date/time or visa versa. For example, the first second of era -1 occurs 
+on Dec 31, 1899 at 23:59:59, and thus era offset is 4294967295, so:
+
+```
+      Date d = {12,31,1899};
+      Time t = {23,59,59};
+      Instant T(d,t).secs()           = -1 or
+      Instant(-1,4294967295,0).secs() = -1 or
+      Instant(-1).toDate()            = {12,31,1899} 
+ ```
+ 
+ and
+ 
+ ```
+      Instant(-1).toTime()            = {23,59,59}
+ ```
+
+The comlete set of methods for Instant are are as follows:
+<b>
+
+```
+	void           setSysTime(int64_t secs)                       // Set system time to a signed 64-bit integer
+	void           setFraction(uint32_t fraction)                 // Set the fractional part to an unsigned 32-bit integer
+	void           initialize(int32_t e,uint32_t o,uint32_t f=0)  // Initialize Instant with signed era, unsigned era offset, and unsigned fraction
+	void           initialize(double sysd)                        // Initialize Instant with signed double precision system time
+	void           initialize(const Date& d, const Time& t)       // Initialize Instant with a Date and Time
+	int32_t        era()       const                              // Return the NTP era
+	uint32_t       eraOffset() const                              // Rethrn the NTP era offset
+	int64_t        secs()      const                              // Return system time as signed 64-bit seconds since Jan 1, 1900 00:00:00
+	uint32_t       fraction()  const                              // Return the fractional part of seconds
+	double         sysTimed()  const                              // Return system time as signed double precision seconds since Jan 1, 1900 00:00:00, including fraction
+    void           addMillis(uint32_t millis)                     // Add milliseconds to Instant
+	Date           toDate()                                       // Return Date (month, day, and year) of this Instant
+	Time           toTime()                                       // Return time of day (hour:minute:second) of this Instant
+    uint64_t       elapsedTime(const Instant& t)   const          // Elapsed time in seconds between this Instant and the input Instant t                             
+    Instant        toTimezone(double hours)                       // Return an Instant whose seconds have been shifted by the input hours   
+    static Instant toInstant(const Date& d, const Time& t)        // Convert Date and Time to Instant
+    static Date    toDate(int64_t secs)                           // Convert signed 64-bit system time to Date
+    static Time    toTime(int64_t secs)                           // Convert signed 64-bit system time to Time
+    int            cmp(const Instant& rhs)                        // 3-way compare, returns -1 for less than, 0 for equal, and +1 for greater than
+
+    friend Instant abs(const Instant& ref)                        // Return an Instant with positive secs; if secs are negative the result is symetric about NTP time=0
+
+```
+
+</b>
+
+Note that <b><i>Date</b></i> and <b><i>Time</b></i> are C-style structures defined in <i>Instant.h</i>
+
+### Timestamp ###
+
+The <b><i>Timestamp</b></i> class aligns an NTP Instant with the on board millisecond timer. It consists of an <i>Instant</i> and two millisecond timestamps, one for timekeeping and the other as a record of when the Timestamp was minted. <i>Updating</i> the Timestamp folds elapsed milliseconds into the Instant. So, for example:
+
+```
+  Date d(1,1,2024);                                                   // Date Jan 1, 2024
+  Time t(12,15,0);                                                    // Time 12:15:00
+  Instant start(d,t);                                                 // Instant initialized to Jan 1, 2024, 12:15:00
+  Timestamp stamp(start);                                             // Timestamp initialized to start
+  delay(500);                                                         // Wait for a half sec
+  unsigned long currentMillis = millis();                             // Current milliseconds from system
+  unsigned long sinceUpdate   = currentMillis - stamp.getMillis();    // Milliseconds since last update (500)
+  unsigned long sinceCreation = currentMillis - stamp.getStamp();     // Milliseconds since creation (500)
+  for( int i=1; i<100; i++) {
+     stamp.update();                                                  // Fold elapsed milliseconds into start
+     delay(500);                                                      // Wait for half a second
+     currentMillis   = millis();                                      // Current milliseconds from system
+     sinceUpdate     = currentMillis - stamp.getMillis();             // Milliseconds since last update (500)
+     sinceCreation   = currentMillis - stamp.getStamp();              // Milliseconds since creation (i*500)
+     Instant current = stamp.ntpTime();                               // Current time based on Jan 1, 2024, 12:15:00 start
   }
 
-  Serial.println();
-  Serial.printf("Starting Test Device\n");
+```
 
-// Start WiFi
-  WiFi.begin(AP_SSID,AP_PSK);
-  Serial.printf("Connecting to Access Point %s\n",AP_SSID);
-  while(WiFi.status() != WL_CONNECTED) {Serial.print(".");delay(500);}
-  Serial.printf("\nWiFi Connected to %s with IP address: %s\n",WiFi.SSID().c_str(),WiFi.localIP().toString().c_str());
-  
-// Start SSDP
-  ssdp.begin(&root);
-  
-// Start a Web Server
-  ctx.begin();
+So <i>Timestamp::getMillis()</i> will change with each call to <i>Timestamp::update()</i>, however <i>Timestamp::getStamp()</i> will always remain the same. Timestamp methods are as follows:
+<b>
+
+```
+  Instant           ntpTime()   const                                // Return the underlying Instant for this Timestamp
+  unsigned long     getMillis() const                                // Return the millisecond timekeeping stamp  
+  unsigned long     getStamp()  const                                // Return the millisecond minting stamp                                        
+  void              initialize(const Instant& sysTime)               // Initializes Timestamp with an Instant and stamps millis
+  void              update()                                         // Update Instant with elapsed milliseconds from timekeeping stamp
+  static Timestamp  stampTime(const Timestamp& t)                    // Construct a new Timestamp with the underlying Instant and stamp it with current millis
+
+  friend Timestamp  abs(const Timestamp& ref)                        // Return a Timestamp with abs(Instant)
+
+```
+
+</b>
+
+Similar to <i>Instant</i>, <i>Timestamp</i> has a full complement of operators for addition, subtraction, and division by integer that operate on the underlying <i>Instant</i>.
+
+### NTPTime ###
+
+The <b><i>NTPTime</b></i> class is a utility class that queries NTP providing timestamps, clock offset, and system time synchronization.
+The following time servers are queried in this order, depending on success of host address resolution:
+
+```
+      time.google.com
+      time.apple.com
+      time-a.nist.gov
+```
+
+System time is computed on the NTP timescale as seconds since 0h Jan 1, 1900. In computing NTP timestamps it is assumed that the clock runs 
+forward from this date/time, hence when era rolls over it will go from n to n+1, and the era offset will go to 0. 
+
+NTPTime methods include:
+
+To query an NTP server for unsigned 32-bit timestamps (seconds and fraction) for request receive and response transmit:
+
+<b>
+
+```
+    static void        getNTPTimestamp(unsigned long& rcvSecs, unsigned long& rcvFraction, unsigned long& tsmSecs, unsigned long& tsmFraction);
+```
+
+</b>
+
+where 
+
+```
+    rcvSecs     - The seconds timestamp on the NTP server that the request was received
+    rcvFraction - The fraction (of a second) timestamp on the NTP server that the request was received
+    tsmSecs     - The seconds timestamp on the NTP server that the response was transmitted
+    tsmFraction - The fraction (of a second) timestamp on the NTP server that the response was transmitted
+```
+
+To compute the NTP clock offset (<i>osft</i>) and return updated system time from the input current system time (<i>ref</i>):
  
-// Setup the RootDevice display name and Http target 
-  root.setDisplayName("Test Device");   
-  root.setTarget("root");  
-  root.setup(&ctx);
+<b>
+
+```
+    static Timestamp   updateSysTime(const Timestamp& ref, Instant& osft);
+```
+
+</b>
+
+UpdateSysTime computes the following Instants:
+
+```
+     T1 - Instant provided from ref updated prior to NTP query
+     T2 - Receive Instant provided by NTP
+     T3 - Transmit Instant provided by NTP
+     T4 - Instant stamped at time of NTP response
+ ```
  
-}
-
-void loop() {
-  ctx.handleClient();     // Handle HTTP requests with the Web Server
-  ssdp.doSSDP();          // Handle SSDP Queries
-  root.doDevice();        // Perform a unit of work for the device
-}
-```
-
-In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext</i> is a Web Server abstraction unifying ESP8266 and ESP32 Web Servers, providing a common API for both. Both APIs are nearly, but not identical, so check out the [header description](https://github.com/dltoth/CommonUtil/blob/main/src/WebContext.h) for usage. 
-
-With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location <i>http://device-IP:80</i>. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#custom-upnpdevice-definition) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a <i>displayHandler</i> to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
+and computes a clock offset as:
 
 ```
-const char html_template[]   PROGMEM = "<!DOCTYPE html><html><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
-                                       "<head><link rel=\"stylesheet\" type=\"text/css\" href=\"/styles.css\"></head>"
-                                       "<body style=\"font-family: Arial\">"
-                                         "<H3 align=\"center\"> %s </H3><br><br>"
-                                         "<div align=\"center\">"
-                                            "<br><br><p align=\"center\">Hello from Root Device</p><br>"
-                                         "</div>"
-                                       "</body></html>";
+     osft = ((T2-T1)+(T3-T4))/2;
+```
+     
+and the updated system time as:
 
 ```
-And add the following lines of code just after <i>root.setup(&ctx)</i>:
-
-```
-  DisplayHandler rootDisplay = [](UPnPDevice* d,WebContext* svr){
-   char buffer[DISPLAY_SIZE];
-   int size = sizeof(buffer);
-   int pos = 0;
-   char path[100];
-   RootDevice* rootPtr = d->asRootDevice();
-   if( rootPtr != NULL ) {
-     pos = formatBuffer_P(buffer,size,pos,html_template,rootPtr->getDisplayName());   
-     svr->send(200,"text/html",buffer);
-   }
-  };
-  root.setDisplayHandler(rootDisplay);
-  root.setRootDisplayHandler(rootDisplay);
-
+     T4 + osft;
 ```
 
-Starting the device will now display the welcome message "Hello from Root Device" at <i>http://device-IP:80</i>. Note that since we set the RootDevice <i>target</i> to <i>root</i>, and set the same displayHandler on root display, the same welcome message will appear at <i>http://device-IP:80/root</i>.
-
-<a name="basic-search"></a>
-
-## Basic Search ##
-
-Lastly, as an example demonstrating device discovery, flash one ESP device with the above code and start it up on a local network. Then flash a second device with the following code:
+Note it is not necessary to use a <i>SystemClock</i> to obtain the reference system time <i>ref</i> above. Rather, <i>ref</i> can be constructed from an instant that has been initialized to within 68 years of the actual time:
 
 ```
-#define AP_SSID "My_SSID"
-#define AP_PSK  "MY_PSK"
-
-#include <UPnPLib.h>
-SSDP       ssdp;
-void setup() {
-  Serial.begin(115200);
-  while (!Serial) {
-    ; // wait for serial port to connect
-  }
-
-  Serial.println();
-  Serial.printf("Starting SSDP Query\n");
-  
-  WiFi.begin(AP_SSID,AP_PSK);
-  Serial.printf("Connecting to Access Point %s\n",AP_SSID);
-  while(WiFi.status() != WL_CONNECTED) {Serial.print(".");delay(500);}
-  Serial.printf("\nWiFi Connected to %s with IP address: %s\n",WiFi.SSID().c_str(),WiFi.localIP().toString().c_str());
-  
-// Perform an SSDP search for RootDevices and print display name and location
-  char  nameBuff[64];
-  char* name = nameBuff;
-  char  locBuff[64];
-  char* loc = locBuff;
-  char  usnBuff[128];
-  char* usn = usnBuff;
-  char  descBuff[128];
-  char* desc = descBuff;
-
-  Serial.printf("Starting RootDevice search...\n");
-  SSDP::searchRequest("upnp:rootdevice",([name,loc,usn,desc](UPnPBuffer* b){
-      name[0] = '\0';
-      loc[0]  = '\0';
-      usn[0]  = '\0';
-      desc[0] = '\0';
-      if( b->displayName(name,64) ) {
-          b->headerValue("LOCATION",loc,64);
-          b->headerValue("USN",usn,128);
-          b->headerValue("DESC.LEELANAUSOFTWARE.COM",desc,128);
-          Serial.printf("   Root Device: %s \n      USN: %s \n      LOCATION: %s\n      DESC: %s\n",name,usn,loc,desc);
-      }  
-  }),WiFi.localIP(),10000);
-  Serial.printf("...RootDevice search complete\n");  
-  Serial.printf("SSDP Query complete\n");  
-}
-
-void loop() {
-}
+     Timestamp ref(Instant(0,JAN1_2024,0));                                            // Initialized to Jan 1, 2024, 00:00:00 (3913056000UL)
+     Instant ofst;
+     Timestamp current = NTPTime::updateSysTime(const Timestamp& ref, Instant& osft);  // osft will be the number of seconds between JAN1_2024 and NTP UTC
 ```
 
-When the second device is started on the same local network with a Serial terminal, the following output is produced:
+At this point, each call to <i>ref.update()</i> will move the Instant <i>ref.ntpTime()</i> forward in time, aligned with the system <i>millis()</i>, and each call to
+<i>current.update()</i> will move the instant <i>current.ntpTime()</i> forward aligned with NTP UTC.
+
+To query NTP and compute the clock offset from the input current system time (ref):
+
+<b>
 
 ```
-Starting SSDP Query Test for Board ESP8266
-Connecting to Access Point My_SSID
-...........
-WiFi Connected to My_SSID with IP address: 10.0.0.165
-Starting RootDevice search...
-Root Device: Test Device 
-      USN: uuid:b2234c12-417f-4e3c-b5d6-4d418143e85d::urn:LeelanauSoftwareCo-com:device:RootDevice:1 
-      LOCATION: http://10.0.0.165:80/
-      DESC: :name:Test Device:devices:0:services:0:
-...RootDevice search complete
-SSDP Query complete
+    static Instant     ntpClockOffset(const Timestamp& ref);
 ```
 
-Notice that a RootDevice with display name <b><i>Test Device</i></b> is found. Its UUID is <b><i>b2234c12-417f-4e3c-b5d6-4d418143e85d</i></b> and uniform resource name (URN) is <b><i>LeelanauSoftwareCo-com:device:RootDevice:1</b></i>. The location of its user interface is <b><i>http://10.0.0.165:80/</i></b>
+</b>
 
-Additional detail on the SSDP implementation can be found in [SSDP Detail](#ssdp-detail) below.
+### SystemClock ###
 
-<a name="custom-upnpdevice-definition"></a>
-
-## Custom UPnPDevice Definition ##
-The UPnPDevice class is intended to be subclassed to supply HTML for the user interface, and to provide Runtime Type Identification (RTTI) and unique UPnP device identifiers for SSDP search. To define a custom UPnPDevice, consider the header file below:
-
-```
-/**
- *
- */
- 
-#ifndef CUSTOMDEVICE_H
-#define CUSTOMDEVICE_H
-
-#include <UPnPLib.h>
-  
-class CustomDevice : public UPnPDevice {
-  public:
-    CustomDevice() :  UPnPDevice("customDevice") {setDisplayName("Custom Device");};
-    CustomDevice(const char* target) : UPnPDevice(target) {setDisplayName("Custom Device");};
-
-    int formatContent(char buffer[], int size, int pos);       // Format content as displayed at the device target, return updated write position
-    int formatRootContent(char buffer[], int size, int pos);   // Format content as displayed at the root device target, return updated write position
-
-    DEFINE_RTTI;
-    DERIVED_TYPE_CHECK(UPnPDevice);
-    DEFINE_EXCLUSIONS(CustomDevice);
-};
-
-#endif
-```
-
-The RootDevice will display abreviated HTML for each of its embedded devices at <i>http://device-IP</i>, as dictated by the <i>formatRootContent()</i> method, and full device display at <i>http://device-IP/rootTarget/deviceTarget</i> as dictated by <i>formatContent()</i>. 
-
-Also, the formatContent() method is expected to fill <i>buffer</i> with HTML starting at the write position <i>pos</i> and return an updated write position. HTML should consist only of device specific content, and should NOT include HTML document start/end tags, body, style, or title tags, as these are supplied by the base and RootDevice classes. 
-
-The macro ``DEFINE_RTTI;`` is used to define Runtime Type Identification (RTTI) and UPnP Device type, and adds the following lines of code to the header file to the class:
+The <b><i>SystemClock</b></i> class provides an NTP synchronized system time in terms of Instant UTC. NTP synchronization happens with an on board Timer (<i>syncTimer</i>) 
+that updates every <i>ntpSync()</i> minutes. The syncTimer can be turned off with 
+<b>
 
 ```
-     private: static const ClassType  _classType;                                                           \
-     public:  static const ClassType* classType()                 {return &_classType;}                     \
-     public:  virtual void*           as(const ClassType* t)      {return((isClassType(t))?(this):(NULL));} \
-     private: static const char*      _upnpType;                                                            \
-     public:  static const char*      upnpType()                  {return _upnpType;}                       \
-     public:  virtual const char*     getType()                   {return upnpType();}                      \
-     public:  virtual boolean         isType(const char* t)       {return(strcmp(t,getType()) == 0);}  
-```
-
-and the macro ``DERIVED_TYPE_CHECK(UPnPDevice);`` adds the type check function:
-
-```
-     public: virtual boolean isClassType( const ClassType* t) {return (_classType.isClassType(t) || UPnPDevice::isClassType(t));}
-```
-
-In order to enforce the memory model for UPnPLib, the macro ``DEFINE_EXCLUSIONS(CustomDevice);`` adds the following lines of code to a header file:
-
-```
-      CustomDevice(const CustomDevice&)= delete;
-      CustomDevice& operator=(const CustomDevice&)= delete;
-```
-
-which disallows copy construction and assignment operator. All of the above macros are defined in <i>UPnPService.h</i>
-
-**Why RTTI?**
-
-Since each embedded UPnPDevice provides its own bit of functionality, one device may rely on another. For example, a timer controlled relay may require a [SoftwareClock](https://github.com/dltoth/DeviceLib/blob/main/src/SoftwareClock.h), or a humidity controlled fan may require a [Thermometer](https://github.com/dltoth/DeviceLib/blob/main/src/Thermometer.h). A device implementer, being familiar with onboard embedded devices, will know if a device or service is available. 
-
-First note that any UPnPObject can retrieve a pointer to the RootDevice as:
-
-```
-   RootDevice* root = rootDevice();
-```
-
-So, if a RootDevice is expected to include a [SoftwareClock](https://github.com/dltoth/DeviceLib/blob/main/src/SoftwareClock.h), then the static RootDevice method
-
-```
-SoftwareClock* clock = (SoftwareClock*)RootDevice::getDevice(rootDevice(), SoftwareClock::classType());
-```
-
-can be used to retrieve a pointer to a SoftwareClock. If SoftwareClock is an embedded device and setup() has been called on the RootDevice, clock will be non-NULL. 
-
-**Important:** RootDevice setup() instantiates the device hierarchy, so RootDevice::getDevice() will necessarily return NULL until all UPnPDevices and UPnPServices have been added and setup has been called.
-
-<a name="custom-upnpdevice-implementation"></a>
-
-## Custom UPnPDevice Implementation ##
-The implementation file <i>CustomDevice.cpp</i> will be as follows:
-
-```
-/**
- * 
- */
-
-#include "CustomDevice.h"
-const char html_template[]        PROGMEM = "<br><br><p align=\"center\">Custom Device Display</p><br>";
-const char root_html_template[]   PROGMEM = "<br><br><p align=\"center\">Custom Device Root Display</p><br>";
-INITIALIZE_DEVICE_TYPES(CustomDevice,LeelanauSoftware-com,CustomDevice,1);
-
-int CustomDevice::formatContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,html_template);}
-int CustomDevice::formatRootContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,root_html_template);}
+    setSyncTimerOFF()
 
 ```
 
-**Note the following:**
+</b>
 
-* The macro ``INITIALIZE_DEVICE_TYPES(CustomDevice,LeelanauSoftware-com,CustomDevice,1)``, initializes both static RTTI class type and UPnPDevice type for CustomDevice, adding the following lines of code to the .cpp file:
+in which case, NTP synchronization happens on demand with <i>sysTime()</i> if the <i>ntpSync()</i> interval has passed. 
 
-```
-        const ClassType CustomDevice::_classType = ClassType();
-        const char*     CustomDevice::_upnpType  = "urn:LeelanauSoftware-com:device:CustomDevice:1";
-```
+SystemClock must be initialized to a time close to (within 68 years of) the actual time UTC. The default initialization time is Jan 1, 2024 00:00:00 UTC.
 
-&ensp;&ensp;&ensp;&ensp;&ensp;UPnP device type is described in more detail below in [UUID, Device Type, and USN](#uuid-device-type-and-usn).
-
-* The function <i>int formatBuffer_P(char buffer[], int buffSize, int pos, PGM_P format, ...)</i>, defined in <i>CommonProgmem.h</i>, is similar to snprintf_P() but uses and updates a write position <i>pos</i>.
-
-A sketch using CustomDevice will then have the form: 
+System time is internally managed as UTC. For example, the following methods provide:
+<b>
 
 ```
-#define AP_SSID "My_SSID"
-#define AP_PSK  "MY_PSK"
-
-#include <CustomDevice.h>
-SSDP         ssdp;
-RootDevice   root;
-CustomDevice d;
-WebContext   ctx;
-
-void setup() {
-
-  Serial.begin(115200);
-  while (!Serial) {
-    ; // wait for serial port to connect
-  }
-
-  Serial.println();
-  Serial.printf("Starting Test Device\n");
-
-// Start WiFi
-  WiFi.begin(AP_SSID,AP_PSK);
-  Serial.printf("Connecting to Access Point %s\n",AP_SSID);
-  while(WiFi.status() != WL_CONNECTED) {Serial.print(".");delay(500);}
-  Serial.printf("\nWiFi Connected to %s with IP address: %s\n",WiFi.SSID().c_str(),WiFi.localIP().toString().c_str());
-  
-// Start SSDP
-  ssdp.begin(&root);
-  
-// Start a Web Server
-  ctx.begin();
- 
-// Setup the RootDevice display name, HTTP target, and device heirarchy 
-  root.setDisplayName("Test Device");   
-  root.setTarget("root");  
-  root.setup(&ctx);
-  root.addDevice(&d);
- 
- /**
- *  Print UPnPDevice info to Serial
- */
-  UPnPDevice::printInfo(&root);  
- 
-}
-
-void loop() {
-  ctx.handleClient();     // Handle HTTP requests with the Web Server
-  ssdp.doSSDP();          // Handle SSDP Queries
-  root.doDevice();        // Perform a unit of work for the device
-}
-
+   sysTime()            - Current system time UTC, updating with NTP as necessary
+   updateSysTime()      - Force NTP update and return current system time UTC
+   startTime()          - The actual UTC start time of SystemClock
+   initializationDate() - Initialization date/time in UTC
 ```
 
-Note the following:
+</b>
 
-* Devices are added to the RootDevice with ``root.addDevice(&d);`` or multiple devices with ``root.addDevices(&d1,...,dN);``. The <i>UPnPDevice::setup()</i> function for is called either when the device is added to root, or when RootDevice::setup() is called. Similarly, UPnPServices can be added to the RootDevice or UPnPDevices.
-* Embedded devices will be displayed at <i>http://device-IP</i> in the order they are added to the RootDevice using their ``formatRootContent()`` method.
-* Embedded devices will be displayed at <i>http://device-IP/rootTarget/deviceTarget</i> using their ``formatContent()`` method.
-* The line ``UPnPDevice::printInfo(&root);`` at the end of <i>setup()</i> will print UPnPDevice information for the device hierarchy:
+Additionaly, for convenience SystemClock has a timezone offset so some methods provide system time as Instant in local time:
+<b>
 
 ```
-Starting UPnPDevice Test for Board ESP8266
-Connecting to Access Point MySSID
-........WiFi Connected to MySSID with IP address: 192.168.1.5
-Web Server started on 192.168.1.5:80/
-RootDevice: Root Device
-   UUID: b7d7a4db-5c83-4b5c-b89f-7fc56fdeb9b5
-   Type: urn:LeelanauSoftware-com:device:RootDevice:1
-   Location is http://192.168.1.5:80/root
-   Root Device has no Services
-Root Device Devices:
-Custom Device:
-   UUID: 22b6aabb-17a3-45c7-9b2d-6140676bf1a9
-   Type: urn:CompanyName-com:device:CustomDevice:1
-   Location is http://192.168.1.5:80/root/customDevice
-   Custom Device has no Services
-
+   now()                - System time in local time
+   lastSync()           - The last NTP synchronization in local time
+   nextSync()           - The next expected NTP synchronization in local time
 ```
 
-It shows the RootDevice location as <i>http://192.168.1.5:80/root</i> and the CustomDevice location as <i>http://192.168.1.5:80/root/customDevice</i>, so the RootDevice is actually available at two URLs: <i>http://192.168.1.5:80</i> and <i>http://192.168.1.5:80/root</i>. The display is different between them:
+</b> 
 
-<i>Figure 1 - RootDevice display at http://192.168.1.5:80</i>
+Other SystemClock methods include: 
 
-![Figure1](./assets/Fig1.png "Figure 1")
-
-Selecting the <b><i>This Device</i></b> button will display the second RootDevice location <i>http://192.168.1.5:80/root</i>
-
-<i>Figure 2 - RootDevice display at http://192.168.1.5:80/root</i>
-
-![Figure2](./assets/Fig2.png "Figure 2")
-
-Notice a single button for <i>Custom Device</i>, and selecting it displays the CustomDevice URL <i>http://192.168.1.5:80/root/customDevice</i>
-
-<i>Figure 3 - CustomDevice display at http://192.168.1.5:80/root/customDevice</i>
-
-![Figure3](./assets/Fig3.png "Figure 3")
-
-A Rich set of turnkey UPnPDevices is included in the companion [DeviceLib](https://github.com/dltoth/DeviceLib) library. The library includes a custom RootDevice, [HubDevice](https://github.com/dltoth/DeviceLib/blob/main/src/HubDevice.h), intended to run as a stand-alone Hub for displaying all SSDP enabled devices on a local network. 
-
-<a name="ssdp-detail"></a>
-
-## SSDP Detail ##
-
-SSDP is chatty and could easily consume a small device responding to unnecessary requests. The protocol implemented here is not strictly SSDP, but rather an abbreviated version of the protocol with four main goals: 
-
-1. Reduce chattiness of standard UPnP/SSDP by only responding to known search requests 
-2. Provide enough information to populate a device hierarchy of the environment
-3. Allow query to see if root devices are still available on the network and
-4. Find instances of a specific Device (or Service) type on the network
-
-To this end two custom headers are added; a Search Target header, ST.LEELANAUSOFTWARE.COM for SSDP search, and a device description header, DESC.LEELANAUSOFTWARECO.COM for search responses (both described below). Search requests without ST.LEELANAUSOFTWARE.COM, and responses without DESC.LEELANAUSOFTWARECO.COM are silently ignored. This abreviated protocol does not advertise on startup or shutdown, thus avoiding a flurry of unnecessary UPnP activiy. Devices respond ONLY to specific queries, and ignore all other SSDP requests.
-
-<a name="uuid-device-type-and-usn"></a>
-
-#### UUID, Device Type, and USN ####
-UPnP mandates each device have a unique UUID that is persistent between boot cycles. In addition, each device must have a <i>Device Type</i> embedded in a Uniform Resource Name (URN). The form for non-standard UPnP devices is: ``urn:domain-name:device:deviceType:ver``, where <i>domain-name</i> is the vendor's domain name using '-' instead of '.', <i>deviceType</i> is the vendor supplied device type, and <i>ver</i> is the device version. For example: <i>urn:LeelanauSoftware-com:device:RelayControl:1</i> is the URN for the device type [RelayControl](https://github.com/dltoth/DeviceLib/blob/main/src/RelayControl.h) provided by LeelanauSoftware.com. 
-
-Lastly, UPnP defines a composite identifier, Unique Service Name (USN), as ``uuid:device-UUID::urn:domain-name:device:deviceType:ver``, where <i>device-UUID</i>, <i>domain-name</i>, and <i>deviceType:ver</i> are as defined above. 
-
-#### Leelanau Software Custom Headers ####
-In order to succinctly describe device hierarchy, the custom response header DESC.LEELANAUSOFTWARE.COM is added. Search responses without this header are ignored. The DESC header includes a custom field descriptor, puuid, which refers to the parent uuid of a given UPnPDevice (or UPnPService). In this implementation of UPnP, RootDevices can have UPnPServices and UPnPDevices, and UPnPDevices can only have UPnPServices. The maximum number of embedded devices (or services) is restricted 8, thus limiting the device hierarchy. The DESC header field can implicitly refer to a either a RootDevice, an embedded UPnPDevice, or a UPnPService. When coupled with the Unique Service Name (USN), a complete device description in context is given. For example, for a UPnPDevice with uuid <i>device-UUID</i> and type <i>deviceType</i>:
+<b>
 
 ```
-USN: uuid:device-UUID::urn:domain-name:device:deviceType:ver
-DESC.LEELANAUSOFTWARECO.COM::name:displayName:devices:num-devices:services:num-services
+    Instant           utcToLocal(const Instant& utc) const       // Convert utc Instant to local time from timezone offset
+    void              initialize(const Instant& ref)             // Initialize SystemClock time, should be within 68 years of actual date/time; default is Jan 1, 2024
+    double            tzOffset() const                           // Get timezone offset in hours
+    void              tzOffset( double hours )                   // Set timezone offset in hours between -14.25 to +14.25
+    const IPAddress&  serverAddress()                const       // Get timeserver IP address to use
+    int               serverPort()                   const       // Get timeserver port to use
+    void              useNTPService(IPAddress addr,int port)     // Set timeserver IP address and port to use
+    void              ntpSync(unsigned int min);                 // Set NTP sync interval in minutes        
+    void              setTimerOFF()                              // Turn syncTimer OFF
+    void              setTimerON()                               // Turn syncTimer ON
+    boolean           timerOFF()       const                     // True of syncTimer is OFF
+    boolean           timerON()        const                     // True if syncTImer is ON
+    void              doDevice()                                 // Do a unit of work updating syncTimer, should be called from loop() in Arduino sketch
 ```
-
-will describe a RootDevice with <i>num-devices</i> embedded UPnPDevices, <i>num-services</i> UPnPServices, and whose display name is set to <i>displayName</i> and
-
-```
-USN: uuid:device-UUID::urn:domain-name:device:deviceType:ver
-DESC.LEELANAUSOFTWARECO.COM::name:displayName:services:num-services:puuid:parent-uuid
-```
-
-will describe an embedded UPnPDevice with <i>num-services</i> UPnPServices, whose display name is set to <i>displayName</i> and whose RootDevice uuid is <i>parent-uuid</i>. So the combinition of <i>device-UUID</i> and <i>parent-uuid</i> can uniquely describe the device hierarchy.
-
-Another important difference between this variant of SSDP and standard UPnP/SSDP is that the LOCATION header provides a URL of an HTML UI for a UPnPDevice (or RootDevice), or service interface for a UPnPService, rather than device description. For example:
-
-```
-LOCATION: http://10.0.0.165:80/rootDeviceTarget/
-```
-
-for the HTML UI of a RootDevice whose target is set to *rootDeviceTarget*, or
-
-```
-LOCATION: http://10.0.0.165:80/rootDeviceTarget/embeddedDeviceTarget
-```
-
-for the HTML UI of an embedded UPnPDevice whose target is set to *embeddedDeviceTarget*.
+</b>
 
 
-In the [example search](#basic-search) code above, the static SSDP::searchRequest method has the following form:
+<br><br>
+<a name="references"></a>
 
-```
-static SSDPResult searchRequest(const char* ST, SSDPHandler handler, IPAddress ifc, int timeout=2000, 
-                                boolean ssdpAll=false);
-```
+## References ##
 
-where
+ 1. [NTP Protocol rfc5905](https://www.rfc-editor.org/rfc/rfc5905) p. 12
 
-```
-ST - Search Target MUST be one of the following:
-           upnp:rootdevice                          For RootDevice searches
-           uuid:Device-UUID                         For example - uuid: b2234c12-417f-4e3c-b5d6-4d418143e85d
-           urn:domain-name:device:deviceType:ver    For example - urn:LeelanauSoftware-com:device:SoftwareClock:1
-           urn:domain-name:service:serviceType:ver  For example - urn:LeelanauSoftware-com:service:GetDateTime:1
-handler - An SSDPHandler function called on each response to the request
-ifc     - The network interface to bind the request to (either WiFi.localIP() or WiFi.softAPIP())
-timeout - (Optional) Listen for responses for timeout milliseconds and then return to caller. If ST is 
-          uuid:Devce-UUID, processing returns after the specific device responds or timeout expires, otherwise 
-          processing returns after timeout milliseconds.
-ssdpAll - (Optional) Applies only to upnp:rootdevice searches, if true, ALL RootDevices, embedded UPnPDevices, 
-          and UPnPServices respond, otherwise only RootDevices respond.
-```
 
-To facilitate ST definition, the static method ``UPnPDevice::upnpType()`` can be used. For example, to search for all [Thermometers](https://github.com/dltoth/DeviceLib/blob/main/src/Thermometer.h) on a local network:
 
-```
-Thermometer::upnpType()
-```
 
-will provide "<i>urn:LeelanauSoftware-com:device:Thermometer:1</i>" for ST.
 
-SSDP response Header names and values will be one of the following:
-
-```
- CACHE-CONTROL:               - For example, max-age = 1800
- LOCATION:                    - Device or Service URL
- ST:                          - Search Target from search request
- USN: Unique Service Name     - uuid:device-UUID::urn:domain-name:device:deviceType:ver for a UPnPDevice or
-                                uuid:device-UUID::urn:domain-name:service:serviceType:ver for a service
- DESC.LEELANAUSOFTWARECO.COM: - name:displayName:devices:num-devices:services:num-services for the RootDevice or
-                                name:displayName:services:num-services:puuid:parent-uuid for an embedded device or
-                                name:displayName:puuid:parent-uuid: for a UPnPService
-```
-
-The timeout parameter defaults to 2 seconds, which is most likely not long enough, so the example above uses 10. Also, SSDP uses UDP, which is inherently unreliable. If you don't see all of the devices you expect, either increase the timeout or re-run the query.
-
-For an example of device search see the nearbyDevices method of [ExtendedDevice](https://github.com/dltoth/DeviceLib/blob/main/src/ExtendedDevice.cpp) in the [DeviceLib library](https://github.com/dltoth/DeviceLib/)
 
