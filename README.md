@@ -1,14 +1,18 @@
 # UPnPLib #
-The most common way to find ESP devices on a local network is to use mDNS and give each device a hard coded host name. This means that device developers have to name their devices in a way that avoids conflict, and users have to keep track of all device names on their local network. Simple Service Discovery Protocol (SSDP) is part of the Universal Plug and Play (UPnP) standard, and provides a means to find devices on a local network automatically without mDNS. One device can be named and all others can be discovered.
+The most common way to find ESP devices on a local network is to use mDNS and give each device a hard coded host name. This means that device developers have to name their devices in a way that avoids conflict, and users have to keep track of all device names on their local network. Simple Service Discovery Protocol (SSDP) is part of the Universal Plug and Play (UPnP) standard, and provides a means to find devices on a local network automatically without mDNS. One device can be named and all others can be discovered. UPnP also provides a protocol for Device Description and a General Event Notification Architecture (GENA).
  
-This UPnP library implements an abbreviated version of [UPnP SSDP](http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf) that gives just enough information to populate a UPnP device hierarchy (root, embedded devices, and services) and allow query for device type and availability. It also provides base class implementation for UPnPDevice, UPnPService, and RootDevice, and a framework for HTML user interface for device interaction. The code is intended for Arduino devices ESP8266 and ESP32, and requires the additional [CommonUtil library](https://github.com/dltoth/CommonUtil/) to facilitate device user interface and Web Server abstraction. The companion library [DeviceLib](https://github.com/dltoth/DeviceLib) provides a rich set of turnkey UPnPDevices for ESP8266/ESP32, but is not required. In what follows, the basic structure for creating custom UPnPDevices and UPnPServices, and advertising them over a local network with SSDP is presented.
+This UPnP library implements an abbreviated version of [UPnP SSDP](http://upnp.org/specs/arch/UPnP-arch-DeviceArchitecture-v1.1.pdf) that gives just enough information to populate a UPnP device hierarchy (root, embedded devices, and services) and allow query for device type and availability. It also provides base class implementation for UPnPDevice, UPnPService, and RootDevice, and a framework for HTML user interface for device interaction. The library <b>does not provide Device Description or Eventing</b>. Device control is provided via HTML interface and UPnPService handlers. The code is intended for Arduino devices ESP8266 and ESP32, and requires the additional [CommonUtil library](https://github.com/dltoth/CommonUtil/) to facilitate device user interface and Web Server abstraction. The companion library [DeviceLib](https://github.com/dltoth/DeviceLib) provides a rich set of turnkey UPnPDevices for ESP8266/ESP32, but is not required. 
+
+In what follows, the basic structure for creating custom UPnPDevices and UPnPServices, and advertising them over a local network with SSDP is presented.
 
 ## Basic Usage ##
 UPnP Defines three basic constructs: root devices, embedded devices, and services, where both root devices and embedded devices can have services and embedded devices. Services are leaf nodes of the hierarchy and may not have either embedded devices or services. Essentially, a root device is a container for a device heirarchy consisting of embedded devices and services. UPnP does not limit the depth or breadth of a device heirarchy. Root devices publish their functionality over HTTP and discovery (SSDP) over UDP.
 
-<b>In this library, only root devices (RootDevice) can have embedded devices (UPnPDevice), and the number of embedded devices is limited to 8. Both RootDevices and embedded devices can have services (UPnPService), and the number of services is also limited to 8.</b> In terms of class heirarchy, RootDevice is a subclass of UPnPDevice, which in turn is a subclass of UPnPObject, and UPnPService is a subclass of UPnPObject.
+<b><i>Important Note:</i></b> In this library, only root devices (<i>RootDevice</i>) can have embedded devices (<i>UPnPDevice</i>), and the number of embedded devices is limited to 8. Both root devices and embedded devices can have services (<i>UPnPService</i>), and the number of services is also limited to 8.
 
-The classes <b><i>RootDevice</i></b>, <b><i>UPnPDevice</i></b>, <b><i>UPnPService</i></b> and <b><i>SSDP</i></b> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location <i>http://device-IP:port</i>, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. A basic sketch has the following form:
+In terms of class heirarchy, <i>RootDevice</i> is a subclass of <i>UPnPDevice</i>, which in turn is a subclass of <i>UPnPObject</i>, and <i>UPnPService</i> is a subclass of <i>UPnPObject</i>. The classes <i>RootDevice</i>, <i>UPnPDevice</i>, <i>UPnPService</i> and <i>SSDP</i> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location <i>http://device-IP:port</i>, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. 
+
+A basic sketch has the following form:
 
 ```
 #define AP_SSID "My_SSID"
@@ -41,7 +45,7 @@ void setup() {
 // Start a Web Server
   ctx.begin();
  
-// Setup the RootDevice display name and Http target 
+// Setup the RootDevice display name and target URL
   root.setDisplayName("Test Device");   
   root.setTarget("root");  
   root.setup(&ctx);
@@ -55,7 +59,7 @@ void loop() {
 }
 ```
 
-In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext</i> is a Web Server abstraction unifying ESP8266 and ESP32 Web Servers, providing a common API for both. Both APIs are nearly, but not identical, so check out the [header description](https://github.com/dltoth/CommonUtil/blob/main/src/WebContext.h) for usage. Also notice the call to ``root.setup(&ctx);``. This is where the RootDevice is initialized, and in particular, when HTTP handlers are registered with the Web Server. So, RootDevice setup MUST happen after WebContext initialization.
+In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext</i> is a Web Server abstraction unifying ESP8266 and ESP32 Web Servers, providing a common API for both. Both APIs are nearly, but not identical, so check out the [header description](https://github.com/dltoth/CommonUtil/blob/main/src/WebContext.h) for usage. Also notice the call to ``root.setup(&ctx);``. This is where the RootDevice is initialized, and in particular, when HTTP handlers are registered with the Web Server. So, <i>RootDevice</i> setup MUST happen after WebContext initialization.
 
 <b><i>Important Note:</i></b> <code>WebContext.begin()</code> MUST be called before <code>RootDevice.setup()</code>
 
@@ -174,7 +178,75 @@ Additional detail on the SSDP implementation can be found in [SSDP Detail](#ssdp
 <a name="custom-upnpdevice-definition"></a>
 
 ## Custom UPnPDevice Definition ##
-The UPnPDevice class is intended to be subclassed to supply HTML for the user interface, and to provide Runtime Type Identification (RTTI) and unique UPnP device identifiers for SSDP search. To define a custom UPnPDevice, consider the header file below:
+
+The <i>UPnPDevice</i> and <i>UPnPService</i> classes are intended to be subclassed to provide Runtime Type Identification (RTTI) and unique supply UPnP device identifiers for SSDP search. In addition, subclassed <i>UPnPDevice</i> will supply HTML for the user interface and subclassed <i>UPnPService</i> will provide externalization for device control. Consider the [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice) example below consisting of <i>CustomService</i> and <i>CustomDevice</i> classes. Starting with [CustomService](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomService.h):
+
+```
+#ifndef CUSTOMSERVICE_H
+#define CUSTOMSERVICE_H
+#include <UPnPLib.h>
+
+class CustomService : public UPnPService {
+  public:
+    CustomService() : UPnPService("getMsg") {setDisplayName("Custom Service");};
+    CustomService(const char* target) : UPnPService(target) {setDisplayName("Custom Service");};
+    virtual ~CustomService() {}
+
+    DEFINE_RTTI;
+    DERIVED_TYPE_CHECK(UPnPService);
+
+/**
+ *   Copy construction and destruction are not allowed
+ */
+     DEFINE_EXCLUSIONS(CustomService);         
+};
+
+#endif
+```
+
+Constructors for <i>CustomService</i> set the URL target and display name. The macro ``DEFINE_RTTI``, defined in [UPnPService.h](https://github.com/dltoth/UPnPLib/blob/main/src/UPnPService.h), is used to define Runtime Type Identification (RTTI) and UPnP device type (or service type), and defines the following public methods:
+
+```
+     public:  static const ClassType* classType();               // Static class type
+     public:  virtual void*           as(const ClassType* t);    // Type safe class cast operator
+     public:  static const char*      upnpType();                // Return UPnP type for object class
+     public:  virtual const char*     getType();                 // Return UPnP type for object instance
+     public:  virtual boolean         isType(const char* t);     // Return true if UPnPObject instance type is t (strcmp(t,getType()) == 0)
+```
+
+and the macro ``DERIVED_TYPE_CHECK(UPnPService)`` adds the virtual type check function:
+
+```
+     public: virtual boolean isClassType( const ClassType* t);   // Virtual type check
+```
+
+RTTI is described in more detail in the section [Why RTTI](#why-rtti) below.
+
+In order to enforce the memory model for UPnPLib, the macro ``DEFINE_EXCLUSIONS(CustomDevice);`` adds the following lines of code to a header file:
+
+```
+      CustomDevice(const CustomDevice&)= delete;
+      CustomDevice& operator=(const CustomDevice&)= delete;
+```
+which disallows copy construction and assignment operator. 
+
+Implementation for [CustomService](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomService.cpp) contains the single line:
+
+```
+      INITIALIZE_SERVICE_TYPES(CustomService,LeelanauSoftware-com,CustomService,1.0.0);
+```
+
+Which defines static class type and <i>UPnPService</i> type.
+
+As mentioned above, a <i>UPnPDevice</i> can be controlled strictly by HTML user interface, or its control can be externalized with <i>UPnPService</i>, either providing a unit of work, setting  parameters, or retrieving values. Device control is implemented via a ``HandlerFunction`` defined as:
+
+```
+      typedef std::function<void(WebContext*)> HandlerFunction;
+```
+
+in [WebContext.h](https://github.com/dltoth/CommonUtil/WebContext.h). A <i>HandlerFunction</i> is defined on a <i>UPnPDevice</i> and set on a <i>UPnPService</i>, with an example shown in the implementation of [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomDevice.cpp) below. 
+
+Starting with [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomDevice.h) definition:
 
 ```
 /**
@@ -183,160 +255,182 @@ The UPnPDevice class is intended to be subclassed to supply HTML for the user in
  
 #ifndef CUSTOMDEVICE_H
 #define CUSTOMDEVICE_H
-
 #include <UPnPLib.h>
+#include "CustomService.h"
   
 class CustomDevice : public UPnPDevice {
   public:
-    CustomDevice() :  UPnPDevice("customDevice") {setDisplayName("Custom Device");};
-    CustomDevice(const char* target) : UPnPDevice(target) {setDisplayName("Custom Device");};
+    CustomDevice();
+    CustomDevice(const char* target);
+
+    CustomService*  customService() {return &_customService;}
 
     int formatContent(char buffer[], int size, int pos);       // Format content as displayed at the device target, return updated write position
     int formatRootContent(char buffer[], int size, int pos);   // Format content as displayed at the root device target, return updated write position
 
+    void    handleGetMsg(WebContext* svr);
+
     DEFINE_RTTI;
     DERIVED_TYPE_CHECK(UPnPDevice);
     DEFINE_EXCLUSIONS(CustomDevice);
+
+    CustomService    _customService;
+    
 };
 
-#endif
+#endif 
 ```
 
-The RootDevice will display abreviated HTML for each of its embedded devices at <i>http://device-IP</i>, as dictated by the <i>formatRootContent()</i> method, and full device display at <i>http://device-IP/rootTarget/deviceTarget</i> as dictated by <i>formatContent()</i>. 
-
-Also, the formatContent() method is expected to fill <i>buffer</i> with HTML starting at the write position <i>pos</i> and return an updated write position. HTML should consist only of device specific content, and should NOT include HTML document start/end tags, body, style, or title tags, as these are supplied by the base and RootDevice classes. 
-
-The macro ``DEFINE_RTTI;`` is used to define Runtime Type Identification (RTTI) and UPnP Device type, and adds the following lines of code to the header file to the class:
+Similar to <i>CustomService</i>, RTTI and exclusions are set. <i>CustomDevice</i> also has a <i>CustomService</i> member variable to allow the <i>HandlerFunction</i> access to <i>CustomDevice</i> pubic methods. The <i>HandlerFunction</i> is declared
 
 ```
-     private: static const ClassType  _classType;                                                           \
-     public:  static const ClassType* classType()                 {return &_classType;}                     \
-     public:  virtual void*           as(const ClassType* t)      {return((isClassType(t))?(this):(NULL));} \
-     private: static const char*      _upnpType;                                                            \
-     public:  static const char*      upnpType()                  {return _upnpType;}                       \
-     public:  virtual const char*     getType()                   {return upnpType();}                      \
-     public:  virtual boolean         isType(const char* t)       {return(strcmp(t,getType()) == 0);}  
+    void    handleGetMsg(WebContext* svr);
 ```
 
-and the macro ``DERIVED_TYPE_CHECK(UPnPDevice);`` adds the type check function:
+User interface for <i>UPnPDevice</i> is controlled by the methods:
 
 ```
-     public: virtual boolean isClassType( const ClassType* t) {return (_classType.isClassType(t) || UPnPDevice::isClassType(t));}
+    int formatContent(char buffer[], int size, int pos); 
+    int formatRootContent(char buffer[], int size, int pos); 
 ```
 
-In order to enforce the memory model for UPnPLib, the macro ``DEFINE_EXCLUSIONS(CustomDevice);`` adds the following lines of code to a header file:
+In particular, <i>RootDevice</i> displays abreviated HTML for each of its embedded devices at the URL <i>http://device-IP</i>, using <i>formatRootContent()</i> of each device, and full device display at <i>http://device-IP/rootTarget/deviceTarget</i> using the device's <i>formatContent()</i> method. The difference in interface look and feel is shown in the [figures below](#device-display).
+
+Both methods are expected to fill <i>buffer</i> with HTML starting at the write position <i>pos</i> and return an updated write position. HTML should consist only of device specific content, and should NOT include HTML document start/end tags, body, style, or title tags, as these are supplied by the base and RootDevice classes. 
+
+Implementation for the display functions and service handler are shown in the [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomDevice.pp) implementation:
 
 ```
-      CustomDevice(const CustomDevice&)= delete;
-      CustomDevice& operator=(const CustomDevice&)= delete;
-```
-
-which disallows copy construction and assignment operator. All of the above macros are defined in <i>UPnPService.h</i>
-
-**Why RTTI?**
-
-Since each embedded UPnPDevice provides its own bit of functionality, one device may rely on another. For example, a timer controlled relay may require a [SoftwareClock](https://github.com/dltoth/DeviceLib/blob/main/src/SoftwareClock.h), or a humidity controlled fan may require a [Thermometer](https://github.com/dltoth/DeviceLib/blob/main/src/Thermometer.h). A device implementer, being familiar with onboard embedded devices, will know if a device or service is available. 
-
-First note that any UPnPObject can retrieve a pointer to the RootDevice as:
-
-```
-   RootDevice* root = rootDevice();
-```
-
-So, if a RootDevice is expected to include a [SoftwareClock](https://github.com/dltoth/DeviceLib/blob/main/src/SoftwareClock.h), then the static RootDevice method
-
-```
-SoftwareClock* clock = (SoftwareClock*)RootDevice::getDevice(rootDevice(), SoftwareClock::classType());
-```
-
-can be used to retrieve a pointer to a SoftwareClock. If SoftwareClock is an embedded device and setup() has been called on the RootDevice, clock will be non-NULL. 
-
-**Important:** RootDevice setup() instantiates the device hierarchy, so RootDevice::getDevice() will necessarily return NULL until all UPnPDevices and UPnPServices have been added and setup has been called.
-
-<a name="custom-upnpdevice-implementation"></a>
-
-## Custom UPnPDevice Implementation ##
-The implementation file <i>CustomDevice.cpp</i> will be as follows:
-
-```
-/**
- * 
- */
-
 #include "CustomDevice.h"
+
 const char html_template[]        PROGMEM = "<br><br><p align=\"center\">Custom Device Display</p><br>";
 const char root_html_template[]   PROGMEM = "<br><br><p align=\"center\">Custom Device Root Display</p><br>";
+const char Msg_template[]         PROGMEM = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                               "<msg>"
+                                                  "<text>Hello from CustomDevice</text>"
+                                               "</msg>";
+
+
 INITIALIZE_DEVICE_TYPES(CustomDevice,LeelanauSoftware-com,CustomDevice,1);
 
-int CustomDevice::formatContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,html_template);}
-int CustomDevice::formatRootContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,root_html_template);}
+CustomDevice::CustomDevice() : UPnPDevice("customDevice") {
+  addService(customService());
+  customService()->setHttpHandler([this](WebContext* svr){this->handleGetMsg(svr);});
+  customService()->setTarget("getMsg");
+  setDisplayName("Custom Device");
+};
 
+CustomDevice::CustomDevice(const char* target) : UPnPDevice(target) {
+  addService(customService());
+  customService()->setHttpHandler([this](WebContext* svr){this->handleGetMsg(svr);});
+  customService()->setTarget("getMsg");
+  setDisplayName("Custom Device");
+};
+
+int  CustomDevice::formatContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,html_template,getDisplayName());}
+int  CustomDevice::formatRootContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,root_html_template,getDisplayName());}
+void CustomDevice::handleGetMsg(WebContext* svr) {svr->send_P(200,"text/xml",Msg_template);}
 ```
 
-**Note the following:**
-
-* The macro ``INITIALIZE_DEVICE_TYPES(CustomDevice,LeelanauSoftware-com,CustomDevice,1)``, initializes both static RTTI class type and UPnPDevice type for CustomDevice, adding the following lines of code to the .cpp file:
+As with <i>CustomService</i>, static class and <i>UPnPDevice</i> types are defined with ``INITIALIZE_DEVICE_TYPES(CustomDevice,LeelanauSoftware-com,CustomDevice,1)``. Target URL and display name are set on the constructor, and <i>CustomService</i> is added to the device with the line
 
 ```
-        const ClassType CustomDevice::_classType = ClassType();
-        const char*     CustomDevice::_upnpType  = "urn:LeelanauSoftware-com:device:CustomDevice:1";
+  addService(customService());
 ```
 
-&ensp;&ensp;&ensp;&ensp;&ensp;UPnP device type is described in more detail below in [UUID, Device Type, and USN](#uuid-device-type-and-usn).
 
-* The function <i>int formatBuffer_P(char buffer[], int buffSize, int pos, PGM_P format, ...)</i>, defined in <i>CommonProgmem.h</i>, is similar to snprintf_P() but uses and updates a write position <i>pos</i>.
-
-A sketch using CustomDevice will then have the form: 
+The <i>HandlerFunction</i> is set on <i>CustomService</i> with the line
 
 ```
-#define AP_SSID "My_SSID"
-#define AP_PSK  "MY_PSK"
+  customService()->setHttpHandler([this](WebContext* svr){this->handleGetMsg(svr);});
+```
 
-#include <CustomDevice.h>
-SSDP         ssdp;
-RootDevice   root;
-CustomDevice d;
-WebContext   ctx;
+and the <i>HandlerFunction</i> is defined as 
+
+```
+  void CustomDevice::handleGetMsg(WebContext* svr) {svr->send_P(200,"text/xml",Msg_template);}
+```
+
+which returns an XML message
+
+```
+   "<msg>"
+        "<text>Hello from CustomDevice</text>"
+   "</msg>";
+```
+
+on the HTTP response.
+
+A sketch using [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomDevice.ino) will then have the form: 
+
+```
+#include <UPnPLib.h>
+#include "CustomDevice.h"
+#include "CustomService.h"
+
+/**
+ *   Simple example to make a device visible on a local network using SSDP with a custom HTML UI. 
+ *   RootDevice will respond to SSDP queries and provide the location of its HTML UI
+ */
+
+#define AP_SSID "MySSID"
+#define AP_PSK  "MyPSK"
+
+#define SERVER_PORT 80
+
+/**
+ *   Device hierarchy will consist of a RootDevice (root), a single embedded CustomDevice (d), and a CustomService (s)
+ */
+WebContext       ctx;
+RootDevice       root;
+CustomDevice     d;
+SSDP             ssdp;
 
 void setup() {
-
   Serial.begin(115200);
   while (!Serial) {
-    ; // wait for serial port to connect
+    ; // wait for serial port to connect. Needed for native USB port only
   }
 
+  Serial.flush();
   Serial.println();
-  Serial.printf("Starting Test Device\n");
+  Serial.printf("Starting CustomDevice\n");
 
-// Start WiFi
   WiFi.begin(AP_SSID,AP_PSK);
   Serial.printf("Connecting to Access Point %s\n",AP_SSID);
   while(WiFi.status() != WL_CONNECTED) {Serial.print(".");delay(500);}
-  Serial.printf("\nWiFi Connected to %s with IP address: %s\n",WiFi.SSID().c_str(),WiFi.localIP().toString().c_str());
-  
-// Start SSDP
+
+  Serial.printf("WiFi Connected to %s with IP address: %s\n",WiFi.SSID().c_str(),WiFi.localIP().toString().c_str());
+
+  ctx.begin(SERVER_PORT);
+  Serial.printf("Web Server started on %s:%d/\n",WiFi.localIP().toString().c_str(),ctx.getLocalPort());
+
+/**
+ *  Initialize SSDP services
+ */
   ssdp.begin(&root);
-  
-// Start a Web Server
-  ctx.begin();
- 
-// Setup the RootDevice display name, HTTP target, and device heirarchy 
-  root.setDisplayName("Test Device");   
+
+/**
+ *  Initalize the device hierarchy. Note that the CustomDevice target will default to "customDevice"
+ *  from its default constructor, and the CustomService target will default to "getMsg" from its 
+ *  default constructor.
+ */
+  root.setDisplayName("Root Device");
   root.setTarget("root");  
   root.setup(&ctx);
   root.addDevice(&d);
- 
- /**
+
+/**
  *  Print UPnPDevice info to Serial
  */
   UPnPDevice::printInfo(&root);  
- 
+
 }
 
 void loop() {
-  ctx.handleClient();     // Handle HTTP requests with the Web Server
-  ssdp.doSSDP();          // Handle SSDP Queries
-  root.doDevice();        // Perform a unit of work for the device
+  ctx.handleClient();
+  ssdp.doSSDP();
+  root.doDevice();
 }
 
 ```
@@ -349,25 +443,33 @@ Note the following:
 * The line ``UPnPDevice::printInfo(&root);`` at the end of <i>setup()</i> will print UPnPDevice information for the device hierarchy:
 
 ```
-Starting UPnPDevice Test for Board ESP8266
+Starting CustomDevice
 Connecting to Access Point MySSID
-........WiFi Connected to MySSID with IP address: 192.168.1.5
-Web Server started on 192.168.1.5:80/
-RootDevice: Root Device
+........WiFi Connected to MySSID with IP address: 192.168.1.20
+Web Server started on 192.168.1.20:80/
+RootDevice Root Device:
    UUID: b7d7a4db-5c83-4b5c-b89f-7fc56fdeb9b5
-   Type: urn:LeelanauSoftware-com:device:RootDevice:1
-   Location is http://192.168.1.5:80/root
+   Type: urn:LeelanauSoftware-com:device:RootDevice:1.0.0
+   Location is http://192.168.1.20:80/
    Root Device has no Services
 Root Device Devices:
 Custom Device:
    UUID: 22b6aabb-17a3-45c7-9b2d-6140676bf1a9
-   Type: urn:CompanyName-com:device:CustomDevice:1
-   Location is http://192.168.1.5:80/root/customDevice
-   Custom Device has no Services
-
+   Type: urn:LeelanauSoftware-com:device:CustomDevice:1
+   Location is http://192.168.1.20:80/root/customDevice
+   Custom Device Services:
+      Custom Service:
+         Type: urn:LeelanauSoftware-com:service:CustomService:1.0.0
+         Location is http://192.168.1.20:80/root/customDevice/getMsg
 ```
 
-It shows the RootDevice location as <i>http://192.168.1.5:80/root</i> and the CustomDevice location as <i>http://192.168.1.5:80/root/customDevice</i>, so the RootDevice is actually available at two URLs: <i>http://192.168.1.5:80</i> and <i>http://192.168.1.5:80/root</i>. The display is different between them:
+It shows the <i>RootDevice</i> has a single embedded device named "Custom Device", and <i>CustomDevice</i> has a single service called "Custom Service". <i>RootDevice</i> location is <i>http://192.168.1.5:80/root</i> and <i>CustomDevice</i> location is <i>http://192.168.1.5:80/root/customDevice</i>, so <i>RootDevice</i> is actually available at two URLs: <i>http://192.168.1.5:80</i> and <i>http://192.168.1.5:80/root</i>. Also note that <i>CustomService</i> location is <i>http://192.168.1.20:80/root/customDevice/getMsg</i>.
+
+<a name="device-display"></a>
+
+## Device Display ##
+
+As noted above, <i>RootDevice</i> display is different between <i>http://device-IP:port</i> and <i>http://device-IP:port</i>/rootTarget, and <i>UPnPDevice</i> display is different between <i>http://device-IP:port</i> and <i>http://device-IP:port</i>/rootTarget/deviceTarget</i>. Display at <i>http://device-IP:port</i> can be thought of as the root portal view, showing all embdded devices.
 
 <i>Figure 1 - RootDevice display at http://192.168.1.5:80</i>
 
@@ -385,7 +487,52 @@ Notice a single button for <i>Custom Device</i>, and selecting it displays the C
 
 ![Figure3](./assets/Fig3.png "Figure 3")
 
-A Rich set of turnkey UPnPDevices is included in the companion [DeviceLib](https://github.com/dltoth/DeviceLib) library. The library includes a custom RootDevice, [HubDevice](https://github.com/dltoth/DeviceLib/blob/main/src/HubDevice.h), intended to run as a stand-alone Hub for displaying all SSDP enabled devices on a local network. 
+Lastly, point a browser to <i>http://root-IP:80/root/customDevice/geMsg</i> to see the result of <i>CustomService</i> invocation.
+
+<i>Figure 4 - XML returned from CustomService at http://192.168.1.5:80/root/customDevice/geMsg</i>
+
+![Figure4](./assets/Fig4.png "Figure 4")
+
+A Rich set of turnkey <i>UPnPDevices</i> and <i>UPnPServices</i> are included in the companion [DeviceLib](https://github.com/dltoth/DeviceLib) library, see the documentation for additional UI examples. The library includes a custom RootDevice, [HubDevice](https://github.com/dltoth/DeviceLib/blob/main/src/HubDevice.h), intended to run as a stand-alone Hub for displaying all SSDP enabled devices on a local network. 
+
+<a name="why-rtti"></a>
+
+## Why RTTI? ##
+
+Since each embedded <i>UPnPDevice</i> provides its own bit of functionality, one device may rely on another. For example, an [OutletTimer](https://github.com/dltoth/DeviceLib/blob/main/src/OutletTimer.h) may require a [SoftwareClock](https://github.com/dltoth/DeviceLib/blob/main/src/SoftwareClock.h), or a [HumidityFan](https://github.com/dltoth/DeviceLib/blob/main/src/HumidityFan.h) may require a [Thermometer](https://github.com/dltoth/DeviceLib/blob/main/src/Thermometer.h). A device implementer, being familiar with onboard embedded devices, will know if a device or service is available. 
+
+Any <i>UPnPObject</i> can retrieve a pointer to the <i>RootDevice</i> as:
+
+```
+   RootDevice* root = rootDevice();
+```
+
+So, if a <i>RootDevice</i> is expected to include a [SoftwareClock](https://github.com/dltoth/DeviceLib/blob/main/src/SoftwareClock.h), then the static <i>RootDevice</i> method
+
+```
+SoftwareClock* clock = (SoftwareClock*)RootDevice::getDevice(rootDevice(), SoftwareClock::classType());
+```
+
+can be used to retrieve a pointer to a SoftwareClock. If SoftwareClock is an embedded device and setup() has been called on the RootDevice, clock will be non-NULL. 
+
+<b><i>Important Note:</i></b> <i>RootDevice</i> <code>setup(</code> instantiates the device hierarchy, so <code>RootDevice::getDevice()</code> will necessarily return NULL until all <i>UPnPDevices</i> and <i>UPnPServices</i> have been added and setup has been called.
+
+Note that ``static classType()`` is tied to an object class and ``virtual isClassType()`` is tied to an object instance. For example, if <i>ObjA</i> derives from <i>UPnPDevice</i> and <i>ObjB</i> derives from <i>ObjA</i>, then:
+
+```
+      ObjB           B;
+      ObjA           A;
+      UPnPDevice*    ptrA = (UPnPDevice*) A.as(UPnPDevice::classType());  // Not NULL
+      UPnPDevice*    ptrB = (UPnPDevice*) B.as(UPnPDevice::classType());  // Not NULL;
+      ptrA->isClassType(ObjA::classType());       // True
+      ptrA->isClassType(ObjB::classType());       // False
+      ptrB->isClassType(ObjA::classType());       // True
+      ptrB->isClassType(ObjB::classType());       // True
+      ObjA*  aPtr = (ObjA*) ptrB->as(ObjA::classType());  // Not NULL
+      ObjB*  bPtr = (ObjB*) ptrA->as(ObjB::classType());  // NULL
+```
+
+Similarly, ``static upnpType()`` is tied to the class of a <i>UPnPObject</i> and ``virtual getType()`` is tied to the instance.
 
 <a name="ssdp-detail"></a>
 
@@ -398,17 +545,24 @@ SSDP is chatty and could easily consume a small device responding to unnecessary
 3. Allow query to see if root devices are still available on the network and
 4. Find instances of a specific Device (or Service) type on the network
 
-To this end two custom headers are added; a Search Target header, ST.LEELANAUSOFTWARE.COM for SSDP search, and a device description header, DESC.LEELANAUSOFTWARECO.COM for search responses (both described below). Search requests without ST.LEELANAUSOFTWARE.COM, and responses without DESC.LEELANAUSOFTWARECO.COM are silently ignored. This abreviated protocol does not advertise on startup or shutdown, thus avoiding a flurry of unnecessary UPnP activiy. Devices respond ONLY to specific queries, and ignore all other SSDP requests.
+To this end two custom headers are added; a Search Target header, ST.LEELANAUSOFTWARE.COM for SSDP search, and a device description header, DESC.LEELANAUSOFTWARECO.COM for search responses (both described below). 
+
+<b><i>Important Note:</i></b> Search requests without ST.LEELANAUSOFTWARE.COM, and responses without DESC.LEELANAUSOFTWARECO.COM are silently ignored 
+
+This abreviated protocol does not advertise on startup or shutdown, thus avoiding a flurry of unnecessary UPnP activiy. Devices respond ONLY to specific queries, and ignore all other SSDP requests.
 
 <a name="uuid-device-type-and-usn"></a>
 
 #### UUID, Device Type, and USN ####
-UPnP mandates each device have a unique UUID that is persistent between boot cycles. In addition, each device must have a <i>Device Type</i> embedded in a Uniform Resource Name (URN). The form for non-standard UPnP devices is: ``urn:domain-name:device:deviceType:ver``, where <i>domain-name</i> is the vendor's domain name using '-' instead of '.', <i>deviceType</i> is the vendor supplied device type, and <i>ver</i> is the device version. For example: <i>urn:LeelanauSoftware-com:device:RelayControl:1</i> is the URN for the device type [RelayControl](https://github.com/dltoth/DeviceLib/blob/main/src/RelayControl.h) provided by LeelanauSoftware.com. 
+UPnP mandates each device have a unique UUID that is persistent between boot cycles. In addition, each device must have a <i>Device Type</i> embedded in a Uniform Resource Name (URN). The form for non-standard UPnP devices is: ``urn:domain-name:device:deviceType:ver``, where <i>domain-name</i> is the vendor's domain name using '-' instead of '.', <i>deviceType</i> is the vendor supplied device type, and <i>ver</i> is the device version. For example: <i>urn:LeelanauSoftware-com:device:RelayControl:1</i> is the URN for version 1 of the device type [RelayControl](https://github.com/dltoth/DeviceLib/blob/main/src/RelayControl.h) provided by LeelanauSoftware.com. 
 
 Lastly, UPnP defines a composite identifier, Unique Service Name (USN), as ``uuid:device-UUID::urn:domain-name:device:deviceType:ver``, where <i>device-UUID</i>, <i>domain-name</i>, and <i>deviceType:ver</i> are as defined above. 
 
 #### Leelanau Software Custom Headers ####
-In order to succinctly describe device hierarchy, the custom response header DESC.LEELANAUSOFTWARE.COM is added. Search responses without this header are ignored. The DESC header includes a custom field descriptor, puuid, which refers to the parent uuid of a given UPnPDevice (or UPnPService). In this implementation of UPnP, RootDevices can have UPnPServices and UPnPDevices, and UPnPDevices can only have UPnPServices. The maximum number of embedded devices (or services) is restricted 8, thus limiting the device hierarchy. The DESC header field can implicitly refer to a either a RootDevice, an embedded UPnPDevice, or a UPnPService. When coupled with the Unique Service Name (USN), a complete device description in context is given. For example, for a UPnPDevice with uuid <i>device-UUID</i> and type <i>deviceType</i>:
+
+In order to succinctly describe device hierarchy, the custom response header DESC.LEELANAUSOFTWARE.COM is added, and as described above, search responses without this header are ignored.
+
+The DESC header includes a custom field descriptor, <i>puuid</i>, which refers to the parent uuid of a given UPnPDevice (or UPnPService). In this implementation of UPnP, RootDevices can have UPnPServices and UPnPDevices, and UPnPDevices can only have UPnPServices. The maximum number of embedded devices (or services) is restricted 8, thus limiting the device hierarchy. The DESC header field can implicitly refer to a either a RootDevice, an embedded UPnPDevice, or a UPnPService. When coupled with the Unique Service Name (USN), a complete device description in context is given. For example, for a UPnPDevice with uuid <i>device-UUID</i> and type <i>deviceType</i>:
 
 ```
 USN: uuid:device-UUID::urn:domain-name:device:deviceType:ver
@@ -486,5 +640,5 @@ SSDP response Header names and values will be one of the following:
 
 The timeout parameter defaults to 2 seconds, which is most likely not long enough, so the example above uses 10. Also, SSDP uses UDP, which is inherently unreliable. If you don't see all of the devices you expect, either increase the timeout or re-run the query.
 
-For an example of device search see the nearbyDevices method of [ExtendedDevice](https://github.com/dltoth/DeviceLib/blob/main/src/ExtendedDevice.cpp) in the [DeviceLib library](https://github.com/dltoth/DeviceLib/)
+For an example of device search see ``ExtendedDevice::nearbyDevices()``  in [ExtendedDevice](https://github.com/dltoth/DeviceLib/blob/main/src/ExtendedDevice.cpp) in the [DeviceLib library](https://github.com/dltoth/DeviceLib/)
 
