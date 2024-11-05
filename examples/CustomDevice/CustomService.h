@@ -20,29 +20,23 @@
  *
  */
 
-#ifndef CUSTOMDEVICE_H
-#define CUSTOMDEVICE_H
+#ifndef CUSTOMSERVICE_H
+#define CUSTOMSERVICE_H
 #include <UPnPLib.h>
-#include "CustomService.h"
-  
-class CustomDevice : public UPnPDevice {
+
+class CustomService : public UPnPService {
   public:
-    CustomDevice();
-    CustomDevice(const char* target);
-
-    CustomService*  customService() {return &_customService;}
-
-    int formatContent(char buffer[], int size, int pos);       // Format content as displayed at the device target, return updated write position
-    int formatRootContent(char buffer[], int size, int pos);   // Format content as displayed at the root device target, return updated write position
-
-    void    handleGetMsg(WebContext* svr);
+    CustomService() : UPnPService("customService") {setDisplayName("Custom Service");};
+    CustomService(const char* target) : UPnPService(target) {setDisplayName("Custom Service");};
+    virtual ~CustomService() {}
 
     DEFINE_RTTI;
-    DERIVED_TYPE_CHECK(UPnPDevice);
-    DEFINE_EXCLUSIONS(CustomDevice);
+    DERIVED_TYPE_CHECK(UPnPService);
 
-    CustomService    _customService;
-    
+/**
+ *   Copy construction and destruction are not allowed
+ */
+     DEFINE_EXCLUSIONS(CustomService);         
 };
 
 #endif

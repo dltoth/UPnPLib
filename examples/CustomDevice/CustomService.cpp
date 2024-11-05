@@ -1,6 +1,6 @@
 /**
  * 
- *  UPnPLib Library
+ *  DeviceLib Library
  *  Copyright (C) 2023  Daniel L Toth
  *
  *  This program is free software: you can redistribute it and/or modify
@@ -20,29 +20,6 @@
  *
  */
 
-#ifndef CUSTOMDEVICE_H
-#define CUSTOMDEVICE_H
-#include <UPnPLib.h>
 #include "CustomService.h"
-  
-class CustomDevice : public UPnPDevice {
-  public:
-    CustomDevice();
-    CustomDevice(const char* target);
 
-    CustomService*  customService() {return &_customService;}
-
-    int formatContent(char buffer[], int size, int pos);       // Format content as displayed at the device target, return updated write position
-    int formatRootContent(char buffer[], int size, int pos);   // Format content as displayed at the root device target, return updated write position
-
-    void    handleGetMsg(WebContext* svr);
-
-    DEFINE_RTTI;
-    DERIVED_TYPE_CHECK(UPnPDevice);
-    DEFINE_EXCLUSIONS(CustomDevice);
-
-    CustomService    _customService;
-    
-};
-
-#endif
+INITIALIZE_SERVICE_TYPES(CustomService,LeelanauSoftware-com,CustomService,1.0.0);

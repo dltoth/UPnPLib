@@ -20,7 +20,6 @@
  *
  */
 
-#include <UPnPLib.h>
 #include "CustomDevice.h"
 
 /**
@@ -28,13 +27,13 @@
  *   RootDevice will respond to SSDP queries and provide the location of its HTML UI
  */
 
-#define AP_SSID "MySSID"
-#define AP_PSK  "MyPSK"
+#define AP_SSID "Dumbledore 2.0"
+#define AP_PSK  "2badboys"
 
 #define SERVER_PORT 80
 
 /**
- *   Device hierarchy will consist of a RootDevice (root) and a single CustomDevice (d)
+ *   Device hierarchy will consist of a RootDevice (root), a single embedded CustomDevice (d), and a CustomService (s)
  */
 WebContext       ctx;
 RootDevice       root;
@@ -65,11 +64,16 @@ void setup() {
  */
   ssdp.begin(&root);
 
+/**
+ *  Initalize the device hierarchy. Note that the CustomDevice target will default to "customDevice"
+ *  from its default constructor, and the CustomService target will default to "getMsg" from its 
+ *  default constructor.
+ */
   root.setDisplayName("Root Device");
   root.setTarget("root");  
   root.setup(&ctx);
   root.addDevice(&d);
-
+  
 /**
  *  Print UPnPDevice info to Serial
  */

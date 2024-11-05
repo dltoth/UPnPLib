@@ -23,8 +23,28 @@
 #include "CustomDevice.h"
 const char html_template[]        PROGMEM = "<br><br><p align=\"center\">Custom Device Display</p><br>";
 const char root_html_template[]   PROGMEM = "<br><br><p align=\"center\">Custom Device Root Display</p><br>";
-INITIALIZE_STATIC_TYPE(CustomDevice);
-INITIALIZE_UPnP_TYPE(CustomDevice,urn:CompanyName-com:device:CustomDevice:1);
+const char Msg_template[]         PROGMEM = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+                                               "<msg>"
+                                                  "<text>Hello from CustomDevice</text>"
+                                               "</msg>";
 
-int CustomDevice::formatContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,html_template,getDisplayName());}
-int CustomDevice::formatRootContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,root_html_template,getDisplayName());}
+
+INITIALIZE_DEVICE_TYPES(CustomDevice,LeelanauSoftware-com,CustomDevice,1);
+
+CustomDevice::CustomDevice() : UPnPDevice("customDevice") {
+  addService(customService());
+  customService()->setHttpHandler([this](WebContext* svr){this->handleGetMsg(svr);});
+  customService()->setTarget("getMsg");
+  setDisplayName("Custom Device");
+};
+
+CustomDevice::CustomDevice(const char* target) : UPnPDevice(target) {
+  addService(customService());
+  customService()->setHttpHandler([this](WebContext* svr){this->handleGetMsg(svr);});
+  customService()->setTarget("getMsg");
+  setDisplayName("Custom Device");
+};
+
+int  CustomDevice::formatContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,html_template,getDisplayName());}
+int  CustomDevice::formatRootContent(char buffer[], int size, int pos) {return formatBuffer_P(buffer,size,pos,root_html_template,getDisplayName());}
+void CustomDevice::handleGetMsg(WebContext* svr) {svr->send_P(200,"text/xml",Msg_template);}
