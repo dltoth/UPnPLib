@@ -8,7 +8,7 @@ In what follows, the basic structure for creating custom UPnPDevices and UPnPSer
 ## Basic Usage ##
 UPnP Defines three basic constructs: root devices, embedded devices, and services, where both root devices and embedded devices can have services and embedded devices. Services are leaf nodes of the hierarchy and may not have either embedded devices or services. Essentially, a root device is a container for a device heirarchy consisting of embedded devices and services. UPnP does not limit the depth or breadth of a device heirarchy. Root devices publish their functionality over HTTP and discovery (SSDP) over UDP.
 
-<b><i>Important Note:</i></b> In this library, only root devices (<i>RootDevice</i>) can have embedded devices (<i>UPnPDevice</i>), and the number of embedded devices is limited to 8. Both root devices and embedded devices can have services (<i>UPnPService</i>), and the number of services is also limited to 8.
+**Important Note:** In this library, only root devices (<i>RootDevice</i>) can have embedded devices (<i>UPnPDevice</i>), and the number of embedded devices is limited to 8. Both root devices and embedded devices can have services (<i>UPnPService</i>), and the number of services is also limited to 8.
 
 In terms of class heirarchy, <i>RootDevice</i> is a subclass of <i>UPnPDevice</i>, which in turn is a subclass of <i>UPnPObject</i>, and <i>UPnPService</i> is a subclass of <i>UPnPObject</i>. The classes <i>RootDevice</i>, <i>UPnPDevice</i>, <i>UPnPService</i> and <i>SSDP</i> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location <i>http://device-IP:port</i>, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. 
 
@@ -61,7 +61,7 @@ void loop() {
 
 In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext</i> is a Web Server abstraction unifying ESP8266 and ESP32 Web Servers, providing a common API for both. Both APIs are nearly, but not identical, so check out the [header description](https://github.com/dltoth/CommonUtil/blob/main/src/WebContext.h) for usage. Also notice the call to ``root.setup(&ctx);``. This is where the RootDevice is initialized, and in particular, when HTTP handlers are registered with the Web Server. So, <i>RootDevice</i> setup MUST happen after WebContext initialization.
 
-<b><i>Important Note:</i></b> <code>WebContext.begin()</code> MUST be called before <code>RootDevice.setup()</code>
+**Important Note:** `WebContext.begin()` MUST be called before `RootDevice.setup()`
 
 
 With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location <i>http://device-IP:80</i>. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#custom-upnpdevice-definition) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a <i>displayHandler</i> to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
@@ -515,7 +515,7 @@ SoftwareClock* clock = (SoftwareClock*)RootDevice::getDevice(rootDevice(), Softw
 
 can be used to retrieve a pointer to a SoftwareClock. If SoftwareClock is an embedded device and setup() has been called on the RootDevice, clock will be non-NULL. 
 
-<b><i>Important Note:</i></b> <i>RootDevice</i> <code>setup(</code> instantiates the device hierarchy, so <code>RootDevice::getDevice()</code> will necessarily return NULL until all <i>UPnPDevices</i> and <i>UPnPServices</i> have been added and setup has been called.
+**Important Note:** *RootDevice* `setup()` instantiates the device hierarchy, so <code>RootDevice::getDevice()</code> will necessarily return NULL until all <i>UPnPDevices</i> and <i>UPnPServices</i> have been added and setup has been called.
 
 Note that ``static classType()`` is tied to an object class and ``virtual isClassType()`` is tied to an object instance. For example, if <i>ObjA</i> derives from <i>UPnPDevice</i> and <i>ObjB</i> derives from <i>ObjA</i>, then:
 
