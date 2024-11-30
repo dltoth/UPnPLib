@@ -10,7 +10,7 @@ UPnP Defines three basic constructs: root devices, embedded devices, and service
 
 **Important Note:** In this library, only root devices (<i>RootDevice</i>) can have embedded devices (<i>UPnPDevice</i>), and the number of embedded devices is limited to 8. Both root devices and embedded devices can have services (<i>UPnPService</i>), and the number of services is also limited to 8.
 
-In terms of class heirarchy, <i>RootDevice</i> is a subclass of <i>UPnPDevice</i>, which in turn is a subclass of <i>UPnPObject</i>, and <i>UPnPService</i> is a subclass of <i>UPnPObject</i>. The classes <i>RootDevice</i>, <i>UPnPDevice</i>, <i>UPnPService</i> and <i>SSDP</i> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location <i>http://device-IP:port</i>, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. 
+In terms of class heirarchy, <i>RootDevice</i> is a subclass of <i>UPnPDevice</i>, which in turn is a subclass of <i>UPnPObject</i>, and <i>UPnPService</i> is a subclass of <i>UPnPObject</i>. The classes <i>RootDevice</i>, <i>UPnPDevice</i>, <i>UPnPService</i> and <i>SSDP</i> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location <i>http\://device-IP:port</i>, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. 
 
 A basic sketch has the following form:
 
@@ -64,7 +64,7 @@ In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext<
 **Important Note:** `WebContext.begin()` MUST be called before `RootDevice.setup()`
 
 
-With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location <i>http://device-IP:80</i>. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#custom-upnpdevice-definition) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a <i>displayHandler</i> to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
+With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location <i>http\://device-IP:80</i>. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#custom-upnpdevice-definition) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a <i>displayHandler</i> to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
 
 ```
 const char html_template[]   PROGMEM = "<!DOCTYPE html><html><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
@@ -96,7 +96,7 @@ And add the following lines of code just after <i>root.setup(&ctx)</i>:
 
 ```
 
-Starting the device will now display the welcome message "Hello from Root Device" at <i>http://device-IP:80</i>. Note that since we set the RootDevice <i>target</i> to <i>root</i>, and set the same displayHandler on root display, the same welcome message will appear at <i>http://device-IP:80/root</i>.
+Starting the device will now display the welcome message "Hello from Root Device" at <i>http\://device-IP:80</i>. Note that since we set the RootDevice <i>target</i> to <i>root</i>, and set the same displayHandler on root display, the same welcome message will appear at <i>http\://device-IP:80/root</i>.
 
 <a name="basic-search"></a>
 
@@ -171,7 +171,7 @@ Root Device: Test Device
 SSDP Query complete
 ```
 
-Notice that a RootDevice with display name <b><i>Test Device</i></b> is found. Its UUID is <b><i>b2234c12-417f-4e3c-b5d6-4d418143e85d</i></b> and uniform resource name (URN) is <b><i>LeelanauSoftwareCo-com:device:RootDevice:1</b></i>. The location of its user interface is <b><i>http://10.0.0.165:80/</i></b>
+Notice that a RootDevice with display name <b><i>Test Device</i></b> is found. Its UUID is <b><i>b2234c12-417f-4e3c-b5d6-4d418143e85d</i></b> and uniform resource name (URN) is <b><i>LeelanauSoftwareCo-com:device:RootDevice:1</b></i>. The location of its user interface is `http://10.0.0.165:80`
 
 Additional detail on the SSDP implementation can be found in [SSDP Detail](#ssdp-detail) below.
 
@@ -294,7 +294,7 @@ User interface for <i>UPnPDevice</i> is controlled by the methods:
     int formatRootContent(char buffer[], int size, int pos); 
 ```
 
-In particular, <i>RootDevice</i> displays abreviated HTML for each of its embedded devices at the URL <i>http://device-IP</i>, using <i>formatRootContent()</i> of each device, and full device display at <i>http://device-IP/rootTarget/deviceTarget</i> using the device's <i>formatContent()</i> method. The difference in interface look and feel is shown in the [figures below](#device-display).
+In particular, <i>RootDevice</i> displays abreviated HTML for each of its embedded devices at the URL <i>http\://device-IP</i>, using <i>formatRootContent()</i> of each device, and full device display at <i>http\://device-IP/rootTarget/deviceTarget</i> using the device's <i>formatContent()</i> method. The difference in interface look and feel is shown in the [figures below](#device-display).
 
 Both methods are expected to fill <i>buffer</i> with HTML starting at the write position <i>pos</i> and return an updated write position. HTML should consist only of device specific content, and should NOT include HTML document start/end tags, body, style, or title tags, as these are supplied by the base and RootDevice classes. 
 
@@ -438,8 +438,8 @@ void loop() {
 Note the following:
 
 * Devices are added to the RootDevice with ``root.addDevice(&d);`` or multiple devices with ``root.addDevices(&d1,...,dN);``. The <i>UPnPDevice::setup()</i> function for is called either when the device is added to root, or when RootDevice::setup() is called. Similarly, UPnPServices can be added to the RootDevice or UPnPDevices.
-* Embedded devices will be displayed at <i>http://device-IP</i> in the order they are added to the RootDevice using their ``formatRootContent()`` method.
-* Embedded devices will be displayed at <i>http://device-IP/rootTarget/deviceTarget</i> using their ``formatContent()`` method.
+* Embedded devices will be displayed at <i>http\://device-IP</i> in the order they are added to the RootDevice using their ``formatRootContent()`` method.
+* Embedded devices will be displayed at <i>http\://device-IP/rootTarget/deviceTarget</i> using their ``formatContent()`` method.
 * The line ``UPnPDevice::printInfo(&root);`` at the end of <i>setup()</i> will print UPnPDevice information for the device hierarchy:
 
 ```
@@ -463,33 +463,33 @@ Custom Device:
          Location is http://192.168.1.20:80/root/customDevice/getMsg
 ```
 
-It shows the <i>RootDevice</i> has a single embedded device named "Custom Device", and <i>CustomDevice</i> has a single service called "Custom Service". <i>RootDevice</i> location is <i>http://192.168.1.5:80/root</i> and <i>CustomDevice</i> location is <i>http://192.168.1.5:80/root/customDevice</i>, so <i>RootDevice</i> is actually available at two URLs: <i>http://192.168.1.5:80</i> and <i>http://192.168.1.5:80/root</i>. Also note that <i>CustomService</i> location is <i>http://192.168.1.20:80/root/customDevice/getMsg</i>.
+It shows the <i>RootDevice</i> has a single embedded device named "Custom Device", and <i>CustomDevice</i> has a single service called "Custom Service". <i>RootDevice</i> location is `http://192.168.1.5:80/root` and *CustomDevice* location is `http://192.168.1.5:80/root/customDevice`, so <i>RootDevice</i> is actually available at two URLs: `http://192.168.1.5:80` and `http://192.168.1.5:80/root`. Also note that <i>CustomService</i> location is `http://192.168.1.20:80/root/customDevice/getMsg`.
 
 <a name="device-display"></a>
 
 ## Device Display ##
 
-As noted above, <i>RootDevice</i> display is different between <i>http://device-IP:port</i> and <i>http://device-IP:port</i>/rootTarget, and <i>UPnPDevice</i> display is different between <i>http://device-IP:port</i> and <i>http://device-IP:port</i>/rootTarget/deviceTarget</i>. Display at <i>http://device-IP:port</i> can be thought of as the root portal view, showing all embdded devices.
+As noted above, <i>RootDevice</i> display is different between <i>http\://device-IP:port</i> and <i>http\://device-IP:port</i>/rootTarget, and <i>UPnPDevice</i> display is different between <i>http\://device-IP:port</i> and <i>http\://device-IP:port</i>/rootTarget/deviceTarget</i>. Display at <i>http\://device-IP:port</i> can be thought of as the root portal view, showing all embdded devices.
 
-<i>Figure 1 - RootDevice display at http://192.168.1.5:80</i>
+*Figure 1 - RootDevice display at* `http://192.168.1.5:80`
 
 ![Figure1](./assets/Fig1.png "Figure 1")
 
-Selecting the <b><i>This Device</i></b> button will display the second RootDevice location <i>http://192.168.1.5:80/root</i>
+Selecting the <b><i>This Device</i></b> button will display the second RootDevice location `http://192.168.1.5:80/root`
 
-<i>Figure 2 - RootDevice display at http://192.168.1.5:80/root</i>
+*Figure 2 - RootDevice display at* `http://192.168.1.5:80/root`
 
 ![Figure2](./assets/Fig2.png "Figure 2")
 
-Notice a single button for <i>Custom Device</i>, and selecting it displays the CustomDevice URL <i>http://192.168.1.5:80/root/customDevice</i>
+Notice a single button for <i>Custom Device</i>, and selecting it displays the CustomDevice URL `http://192.168.1.5:80/root/customDevice`
 
-<i>Figure 3 - CustomDevice display at http://192.168.1.5:80/root/customDevice</i>
+*Figure 3 - CustomDevice display at* `http://192.168.1.5:80/root/customDevice`
 
 ![Figure3](./assets/Fig3.png "Figure 3")
 
-Lastly, point a browser to <i>http://root-IP:80/root/customDevice/geMsg</i> to see the result of <i>CustomService</i> invocation.
+Lastly, point a browser to *http\://root-IP:80/root/customDevice/getMsg* to see the result of *CustomService* invocation.
 
-<i>Figure 4 - XML returned from CustomService at http://192.168.1.5:80/root/customDevice/geMsg</i>
+*Figure 4 - XML returned from CustomService at* `http://192.168.1.5:80/root/customDevice/geMsg`
 
 ![Figure4](./assets/Fig4.png "Figure 4")
 
