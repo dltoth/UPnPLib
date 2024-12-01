@@ -64,7 +64,7 @@ In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext<
 **Important Note:** `WebContext.begin()` MUST be called before `RootDevice.setup()`
 
 
-With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location <i>http\://device-IP:80</i>. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#custom-upnpdevice-definition) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a <i>displayHandler</i> to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
+With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location `http://device-IP:80`. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#custom-upnpdevice-definition) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a <i>displayHandler</i> to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
 
 ```
 const char html_template[]   PROGMEM = "<!DOCTYPE html><html><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
