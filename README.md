@@ -222,7 +222,7 @@ and the macro ``DERIVED_TYPE_CHECK(UPnPService)`` adds the virtual type check fu
      public: virtual boolean isClassType( const ClassType* t);   // Virtual type check
 ```
 
-**Important Note:** The argument to the macro ``DERIVED_TYPE_CHECK`` MUST be the base class, in this case <i>UPnPDevice</i>
+**Important Note:** The argument to the macro ``DERIVED_TYPE_CHECK`` MUST be the base class, in this case <i>UPnPService</i>
 
 RTTI is described in more detail in the section [Why RTTI](#why-rtti) below.
 
