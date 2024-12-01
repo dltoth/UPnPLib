@@ -10,9 +10,9 @@ UPnP Defines three basic constructs: root devices, embedded devices, and service
 
 **Important Note:** In this library, only root devices (<i>RootDevice</i>) can have embedded devices (<i>UPnPDevice</i>), and the number of embedded devices is limited to 8. Both root devices and embedded devices can have services (<i>UPnPService</i>), and the number of services is also limited to 8.
 
-In terms of class heirarchy, <i>RootDevice</i> is a subclass of <i>UPnPDevice</i>, which in turn is a subclass of <i>UPnPObject</i>, and <i>UPnPService</i> is a subclass of <i>UPnPObject</i>. The classes <i>RootDevice</i>, <i>UPnPDevice</i>, <i>UPnPService</i> and <i>SSDP</i> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location <i>http\://device-IP:port</i>, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. 
+In terms of class heirarchy, <i>RootDevice</i> is a subclass of <i>UPnPDevice</i>, which in turn is a subclass of <i>UPnPObject</i>, and <i>UPnPService</i> is a subclass of <i>UPnPObject</i>. The classes <i>RootDevice</i>, <i>UPnPDevice</i>, <i>UPnPService</i> and <i>SSDP</i> are expected to be constructed and managed in global scope above the setup() function in an Arduino sketch. Copy construction and and Object assignment are not allowed; objects are expected to live over the life of an executing application, where UPnPObjects are passed via pointer. The RootDevice is accessible over HTTP at the location `http://device-IP:port`, so there must only be a single RootDevice per ESP device. RootDevice is a container for embedded UPnPDevices, which in turn provide functionality. 
 
-A basic sketch has the following form:
+A [basic sketch](https://github.com/dltoth/UPnPLib/blob/main/examples/UPnPLib/UPnPLib.ino) has the following form:
 
 ```
 #define AP_SSID "My_SSID"
@@ -59,12 +59,12 @@ void loop() {
 }
 ```
 
-In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext</i> is a Web Server abstraction unifying ESP8266 and ESP32 Web Servers, providing a common API for both. Both APIs are nearly, but not identical, so check out the [header description](https://github.com/dltoth/CommonUtil/blob/main/src/WebContext.h) for usage. Also notice the call to ``root.setup(&ctx);``. This is where the RootDevice is initialized, and in particular, when HTTP handlers are registered with the Web Server. So, <i>RootDevice</i> setup MUST happen after WebContext initialization.
+In the example above, notice the declaration ``WebContext ctx;``. <i>WebContext</i> is a Web Server abstraction unifying ESP8266 and ESP32 Web Servers, providing a common API for both. Both APIs are nearly, but not identical, so check out the [header description](https://github.com/dltoth/CommonUtil/blob/main/src/WebContext.h) for usage. Also notice the call to ``root.setup(&ctx)``. This is where the RootDevice is initialized, and in particular, when HTTP handlers are registered with the Web Server. So, <i>RootDevice</i> setup MUST happen after WebContext initialization.
 
-**Important Note:** `WebContext.begin()` MUST be called before `RootDevice.setup()`
+**Important Note:** <code>WebContext.begin()</code> MUST be called before <code>RootDevice.setup()</code>
 
 
-With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location `http://device-IP:80`. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#custom-upnpdevice-definition) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a <i>displayHandler</i> to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
+With the above sketch, <b><i>root</i></b> will have it's user interface advertised via SSDP at the location `http://device-IP:80`. The base <i>RootDevice</i> class provides a specific HTML user interaction model, which is described in more detail in [Custom Device](#creating-a-custom-upnpdevice) section below. Customization of the UI is typically done by subclassing <i>UPnPDevice</i> and adding custom devices to the root, but a simple UI can be implemented by providing a ``displayHandler`` to <i>RootDevice</i>. For example, add the following lines of code below the <i>#include "UPnPLib"</i> declaration:
 
 ```
 const char html_template[]   PROGMEM = "<!DOCTYPE html><html><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">"
@@ -96,7 +96,9 @@ And add the following lines of code just after <i>root.setup(&ctx)</i>:
 
 ```
 
-Starting the device will now display the welcome message "Hello from Root Device" at <i>http\://device-IP:80</i>. Note that since we set the RootDevice <i>target</i> to <i>root</i>, and set the same displayHandler on root display, the same welcome message will appear at <i>http\://device-IP:80/root</i>.
+Starting the device will now display the welcome message "Hello from Root Device" at `http://device-IP:80`. Note that since we set the RootDevice <i>target</i> to <i>root</i>, and set the same displayHandler on root display, the same welcome message will appear at `http://device-IP:80/root`.
+
+**Important Note:** Adding a custom display handler for a device will override its standard UI model, in this case for the <i>RootDevice</i> but could also be done for each device type.
 
 <a name="basic-search"></a>
 
@@ -171,13 +173,13 @@ Root Device: Test Device
 SSDP Query complete
 ```
 
-Notice that a RootDevice with display name <b><i>Test Device</i></b> is found. Its UUID is <b><i>b2234c12-417f-4e3c-b5d6-4d418143e85d</i></b> and uniform resource name (URN) is <b><i>LeelanauSoftwareCo-com:device:RootDevice:1</b></i>. The location of its user interface is `http://10.0.0.165:80`
+Notice that a RootDevice with display name <b><i>Test Device</i></b> is found. Its UUID is <b><i>b2234c12-417f-4e3c-b5d6-4d418143e85d</i></b> and uniform resource name (URN) is <b><i>LeelanauSoftwareCo-com:device:RootDevice:1</b></i>. The location of its user interface is `http://10.0.0.165:80/` and its description header is `:name:Test Device:devices:0:services:0:` indicating it has 0 embedded devices and 0 services.
 
 Additional detail on the SSDP implementation can be found in [SSDP Detail](#ssdp-detail) below.
 
-<a name="custom-upnpdevice-definition"></a>
+<a name="creating-a-custom-upnpdevice"></a>
 
-## Custom UPnPDevice Definition ##
+## Creating a Custom UPnPDevice ##
 
 The <i>UPnPDevice</i> and <i>UPnPService</i> classes are intended to be subclassed to provide Runtime Type Identification (RTTI) and unique supply UPnP device identifiers for SSDP search. In addition, subclassed <i>UPnPDevice</i> will supply HTML for the user interface and subclassed <i>UPnPService</i> will provide externalization for device control. Consider the [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice) example below consisting of <i>CustomService</i> and <i>CustomDevice</i> classes. Starting with [CustomService](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomService.h):
 
@@ -219,6 +221,8 @@ and the macro ``DERIVED_TYPE_CHECK(UPnPService)`` adds the virtual type check fu
 ```
      public: virtual boolean isClassType( const ClassType* t);   // Virtual type check
 ```
+
+**Important Note:** The argument to the macro ``DERIVED_TYPE_CHECK`` MUST be the base class, in this case <i>UPnPDevice</i>
 
 RTTI is described in more detail in the section [Why RTTI](#why-rtti) below.
 
@@ -294,11 +298,13 @@ User interface for <i>UPnPDevice</i> is controlled by the methods:
     int formatRootContent(char buffer[], int size, int pos); 
 ```
 
-In particular, <i>RootDevice</i> displays abreviated HTML for each of its embedded devices at the URL <i>http\://device-IP</i>, using <i>formatRootContent()</i> of each device, and full device display at <i>http\://device-IP/rootTarget/deviceTarget</i> using the device's <i>formatContent()</i> method. The difference in interface look and feel is shown in the [figures below](#device-display).
+In particular, <i>RootDevice</i> displays abreviated HTML for each of its embedded devices at the URL `http://device-IP`, using <i>formatRootContent()</i> of each device, and full device display at `http://device-IP/rootTarget/deviceTarget` using the device's <i>formatContent()</i> method. The difference in interface look and feel is shown in the [figures below](#device-display).
 
-Both methods are expected to fill <i>buffer</i> with HTML starting at the write position <i>pos</i> and return an updated write position. HTML should consist only of device specific content, and should NOT include HTML document start/end tags, body, style, or title tags, as these are supplied by the base and RootDevice classes. 
+Both methods are expected to fill the display buffer ``buffer`` with HTML starting at the write position ``pos`` and return an updated write position. HTML should consist only of device specific content, and should NOT include HTML document start/end tags, body, style, or title tags, as these are supplied by the base and RootDevice classes. 
 
-Implementation for the display functions and service handler are shown in the [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomDevice.pp) implementation:
+**Important Note:** The display buffer passed in by *RootDevice* is fixed length so embedded devices are expected to insert only minimal content at the root location with ``formatRootContent(...)``. Extensive HTML content should be provided by a separate URL embedded in an HTML ``<iFrame>`` or ``<object>`` tag.
+
+Implementation for the display functions and service handler are shown in the implementation for [CustomDevice](https://github.com/dltoth/UPnPLib/blob/main/examples/CustomDevice/CustomDevice.pp):
 
 ```
 #include "CustomDevice.h"
@@ -438,8 +444,8 @@ void loop() {
 Note the following:
 
 * Devices are added to the RootDevice with ``root.addDevice(&d);`` or multiple devices with ``root.addDevices(&d1,...,dN);``. The <i>UPnPDevice::setup()</i> function for is called either when the device is added to root, or when RootDevice::setup() is called. Similarly, UPnPServices can be added to the RootDevice or UPnPDevices.
-* Embedded devices will be displayed at <i>http\://device-IP</i> in the order they are added to the RootDevice using their ``formatRootContent()`` method.
-* Embedded devices will be displayed at <i>http\://device-IP/rootTarget/deviceTarget</i> using their ``formatContent()`` method.
+* Embedded devices will be displayed at `http://device-IP` in the order they are added to the RootDevice using their ``formatRootContent()`` method.
+* Embedded devices will be displayed at `http://device-IP/rootTarget/deviceTarget` using their ``formatContent()`` method.
 * The line ``UPnPDevice::printInfo(&root);`` at the end of <i>setup()</i> will print UPnPDevice information for the device hierarchy:
 
 ```
@@ -463,31 +469,31 @@ Custom Device:
          Location is http://192.168.1.20:80/root/customDevice/getMsg
 ```
 
-It shows the <i>RootDevice</i> has a single embedded device named "Custom Device", and <i>CustomDevice</i> has a single service called "Custom Service". <i>RootDevice</i> location is `http://192.168.1.5:80/root` and *CustomDevice* location is `http://192.168.1.5:80/root/customDevice`, so <i>RootDevice</i> is actually available at two URLs: `http://192.168.1.5:80` and `http://192.168.1.5:80/root`. Also note that <i>CustomService</i> location is `http://192.168.1.20:80/root/customDevice/getMsg`.
+It shows the <i>RootDevice</i> has a single embedded device named "Custom Device", and <i>CustomDevice</i> has a single service called "Custom Service". <i>RootDevice</i> location is `http://192.168.1.5:80/root` and <i>CustomDevice</i> location is `http://192.168.1.5:80/root/customDevice`, so <i>RootDevice</i> is actually available at two URLs: `http://192.168.1.5:80` and `http://192.168.1.5:80/root`. Also note that <i>CustomService</i> location is `http://192.168.1.20:80/root/customDevice/getMsg`.
 
 <a name="device-display"></a>
 
 ## Device Display ##
 
-As noted above, <i>RootDevice</i> display is different between <i>http\://device-IP:port</i> and <i>http\://device-IP:port</i>/rootTarget, and <i>UPnPDevice</i> display is different between <i>http\://device-IP:port</i> and <i>http\://device-IP:port</i>/rootTarget/deviceTarget</i>. Display at <i>http\://device-IP:port</i> can be thought of as the root portal view, showing all embdded devices.
+As noted above, <i>RootDevice</i> display is different between `http://device-IP:port` and `http://device-IP:port</i>/rootTarget`, and <i>UPnPDevice</i> display is different between `http://device-IP:port` and `http://device-IP:port</i>/rootTarget/deviceTarget`. Display at `http://device-IP:port` can be thought of as the root portal view, showing all embdded devices.
 
 *Figure 1 - RootDevice display at* `http://192.168.1.5:80`
 
 ![Figure1](./assets/Fig1.png "Figure 1")
 
-Selecting the <b><i>This Device</i></b> button will display the second RootDevice location `http://192.168.1.5:80/root`
+Selecting <b><i>This Device</i></b> will display *RootDevice* at the URL `http://192.168.1.5:80/root`
 
 *Figure 2 - RootDevice display at* `http://192.168.1.5:80/root`
 
 ![Figure2](./assets/Fig2.png "Figure 2")
 
-Notice a single button for <i>Custom Device</i>, and selecting it displays the CustomDevice URL `http://192.168.1.5:80/root/customDevice`
+Notice a single button for *Custom Device*, and selecting it displays *CustomDevice* at the URL `http://192.168.1.5:80/root/customDevice`
 
 *Figure 3 - CustomDevice display at* `http://192.168.1.5:80/root/customDevice`
 
 ![Figure3](./assets/Fig3.png "Figure 3")
 
-Lastly, point a browser to *http\://root-IP:80/root/customDevice/getMsg* to see the result of *CustomService* invocation.
+Lastly, point a browser to `http://root-IP:80/root/customDevice/geMsg` to see the result of *CustomService* invocation.
 
 *Figure 4 - XML returned from CustomService at* `http://192.168.1.5:80/root/customDevice/geMsg`
 
@@ -510,12 +516,12 @@ Any <i>UPnPObject</i> can retrieve a pointer to the <i>RootDevice</i> as:
 So, if a <i>RootDevice</i> is expected to include a [SoftwareClock](https://github.com/dltoth/DeviceLib/blob/main/src/SoftwareClock.h), then the static <i>RootDevice</i> method
 
 ```
-SoftwareClock* clock = (SoftwareClock*)RootDevice::getDevice(rootDevice(), SoftwareClock::classType());
+   SoftwareClock* clock = (SoftwareClock*)RootDevice::getDevice(rootDevice(), SoftwareClock::classType());
 ```
 
-can be used to retrieve a pointer to a SoftwareClock. If SoftwareClock is an embedded device and setup() has been called on the RootDevice, clock will be non-NULL. 
+can be used to retrieve a pointer to a <i>SoftwareClock</i>. If <i>SoftwareClock</i> is an embedded device and ``setup()`` has been called on the <i>RootDevice</i>, clock will be non-NULL. 
 
-**Important Note:** *RootDevice* `setup()` instantiates the device hierarchy, so <code>RootDevice::getDevice()</code> will necessarily return NULL until all <i>UPnPDevices</i> and <i>UPnPServices</i> have been added and setup has been called.
+**Important Note:** <i>RootDevice</i> <code>setup()</code> instantiates the device hierarchy, so <code>RootDevice::getDevice()</code> will necessarily return NULL until all <i>UPnPDevices</i> and <i>UPnPServices</i> have been added and setup has been called.
 
 Note that ``static classType()`` is tied to an object class and ``virtual isClassType()`` is tied to an object instance. For example, if <i>ObjA</i> derives from <i>UPnPDevice</i> and <i>ObjB</i> derives from <i>ObjA</i>, then:
 
@@ -545,9 +551,9 @@ SSDP is chatty and could easily consume a small device responding to unnecessary
 3. Allow query to see if root devices are still available on the network and
 4. Find instances of a specific Device (or Service) type on the network
 
-To this end two custom headers are added; a Search Target header, ST.LEELANAUSOFTWARE.COM for SSDP search, and a device description header, DESC.LEELANAUSOFTWARECO.COM for search responses (both described below). 
+To this end two custom headers are added; a Search Target header, `ST.LEELANAUSOFTWARE.COM` for SSDP search, and a device description header, `DESC.LEELANAUSOFTWARECO.COM` for search responses (both described below). 
 
-<b><i>Important Note:</i></b> Search requests without ST.LEELANAUSOFTWARE.COM, and responses without DESC.LEELANAUSOFTWARECO.COM are silently ignored 
+**Important Note:** Search requests without `ST.LEELANAUSOFTWARE.COM`, and responses without `DESC.LEELANAUSOFTWARECO.COM` are silently ignored 
 
 This abreviated protocol does not advertise on startup or shutdown, thus avoiding a flurry of unnecessary UPnP activiy. Devices respond ONLY to specific queries, and ignore all other SSDP requests.
 
@@ -560,9 +566,9 @@ Lastly, UPnP defines a composite identifier, Unique Service Name (USN), as ``uui
 
 #### Leelanau Software Custom Headers ####
 
-In order to succinctly describe device hierarchy, the custom response header DESC.LEELANAUSOFTWARE.COM is added, and as described above, search responses without this header are ignored.
+In order to succinctly describe device hierarchy, the custom response header `DESC.LEELANAUSOFTWARE.COM` is added, and as described above, search responses without this header are ignored.
 
-The DESC header includes a custom field descriptor, <i>puuid</i>, which refers to the parent uuid of a given UPnPDevice (or UPnPService). In this implementation of UPnP, RootDevices can have UPnPServices and UPnPDevices, and UPnPDevices can only have UPnPServices. The maximum number of embedded devices (or services) is restricted 8, thus limiting the device hierarchy. The DESC header field can implicitly refer to a either a RootDevice, an embedded UPnPDevice, or a UPnPService. When coupled with the Unique Service Name (USN), a complete device description in context is given. For example, for a UPnPDevice with uuid <i>device-UUID</i> and type <i>deviceType</i>:
+The `DESC` header includes a custom field descriptor, <i>puuid</i>, which refers to the parent uuid of a given UPnPDevice (or UPnPService). In this implementation of UPnP, RootDevices can have UPnPServices and UPnPDevices, and UPnPDevices can only have UPnPServices. The maximum number of embedded devices (or services) is restricted 8, thus limiting the device hierarchy. The `DESC` header field can implicitly refer to a either a RootDevice, an embedded UPnPDevice, or a UPnPService. When coupled with the Unique Service Name (USN), a complete device description in context is given. For example, for a UPnPDevice with uuid <i>device-UUID</i> and type <i>deviceType</i>:
 
 ```
 USN: uuid:device-UUID::urn:domain-name:device:deviceType:ver
@@ -578,7 +584,7 @@ DESC.LEELANAUSOFTWARECO.COM::name:displayName:services:num-services:puuid:parent
 
 will describe an embedded UPnPDevice with <i>num-services</i> UPnPServices, whose display name is set to <i>displayName</i> and whose RootDevice uuid is <i>parent-uuid</i>. So the combinition of <i>device-UUID</i> and <i>parent-uuid</i> can uniquely describe the device hierarchy.
 
-Another important difference between this variant of SSDP and standard UPnP/SSDP is that the LOCATION header provides a URL of an HTML UI for a UPnPDevice (or RootDevice), or service interface for a UPnPService, rather than device description. For example:
+Another important difference between this variant of SSDP and standard UPnP/SSDP is that the `LOCATION` header provides a URL of an HTML UI for a UPnPDevice (or RootDevice), or service interface for a UPnPService, rather than device description. For example:
 
 ```
 LOCATION: http://10.0.0.165:80/rootDeviceTarget/
@@ -593,7 +599,7 @@ LOCATION: http://10.0.0.165:80/rootDeviceTarget/embeddedDeviceTarget
 for the HTML UI of an embedded UPnPDevice whose target is set to *embeddedDeviceTarget*.
 
 
-In the [example search](#basic-search) code above, the static SSDP::searchRequest method has the following form:
+In the [example search](#basic-search) code above, the static `SSDP::searchRequest(...)` method has the following form:
 
 ```
 static SSDPResult searchRequest(const char* ST, SSDPHandler handler, IPAddress ifc, int timeout=2000, 
@@ -640,5 +646,28 @@ SSDP response Header names and values will be one of the following:
 
 The timeout parameter defaults to 2 seconds, which is most likely not long enough, so the example above uses 10. Also, SSDP uses UDP, which is inherently unreliable. If you don't see all of the devices you expect, either increase the timeout or re-run the query.
 
-For an example of device search see ``ExtendedDevice::nearbyDevices()``  in [ExtendedDevice](https://github.com/dltoth/DeviceLib/blob/main/src/ExtendedDevice.cpp) in the [DeviceLib library](https://github.com/dltoth/DeviceLib/)
+The SSDPHandler function is defined in [ssdp.h](https://github.com/dltoth/UPnPLib/blob/main/src/ssdp.h) as a function returning void that takes a pointer to a [UPnPBuffer](https://github.com/dltoth/UPnPLib/blob/main/src/UPnPBuffer.h) as input:
+
+```
+    typedef std::function<void(UPnPBuffer*)> SSDPHandler;
+```
+
+`UPnPBuffer*` is supplied to the `SSDPHandler` by `ssdp::searchRequest(...)`. It has three important methods for returning SSDP header values:
+
+```
+    boolean headerValue(const char* header, char buffer[], size_t len); 
+    boolean headerValue_P(PGM_P header, char buffer[], size_t len); 
+    boolean displayName(char buffer[], size_t len); // Return true if DESC header is present and fill buffer with the :name: value
+```
+
+Each returns a `boolean` indicating whether the header value requested is present, and if `true`, then fills the char buffer input with the requested value. In particular, `displayName(...)` returns `true` only if the `DESC` header is present and there is a `name` field on the header. 
+
+**Important Note:** The `SSDPHandler` will only be called if a `DESC` header is present on the response 
+
+For an example of device search see ``ExtendedDevice::nearbyDevices()``  in the [ExtendedDevice](https://github.com/dltoth/DeviceLib/blob/main/src/ExtendedDevice.cpp) class in [DeviceLib](https://github.com/dltoth/DeviceLib/)
+
+
+
+
+
 
