@@ -27,8 +27,8 @@
  *   RootDevice will respond to SSDP queries and provide the location of its HTML UI
  */
 
-#define AP_SSID "Dumbledore 2.0"
-#define AP_PSK  "2badboys"
+#define AP_SSID "My_SSID"
+#define AP_PSK  "My_PSK"
 
 #define SERVER_PORT 80
 
